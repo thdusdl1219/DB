@@ -39,6 +39,7 @@ struct PF_BufPageDesc {
     short int  pinCount;    // pin count
     PageNum    pageNum;     // page number for this page
     int        fd;          // OS file descriptor of this page
+    PF_BufPageDesc() : pData(NULL), next(-1), prev(-1), bDirty(0), pinCount(0), pageNum(-1), fd(-1) {}
 };
 
 //

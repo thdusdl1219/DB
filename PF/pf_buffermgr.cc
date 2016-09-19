@@ -14,6 +14,8 @@ using namespace std;
 StatisticsMgr *pStatisticsMgr;
 #endif
 
+// LinkList<PF_BufPageDesc> *bufList;
+
 //
 // PF_BufferMgr
 //
@@ -34,8 +36,16 @@ StatisticsMgr *pStatisticsMgr;
 
 PF_BufferMgr::PF_BufferMgr(int _numPages) : hashTable(PF_HASH_TBL_SIZE)
 {
-      
+  pStatisticsMgr = new StatisticsMgr ();
+  //bufList = new LinkList<PF_BufPageDesc> ();
+  //bufList->Append(bufTable);
+  bufTable = new PF_BufPageDesc[numPages]();
 
+  numPages = 0;
+  pageSize = PF_PAGE_SIZE;
+  first = 0;
+  last = 0;
+  free = 0;
 }
 
 //
@@ -45,7 +55,8 @@ PF_BufferMgr::PF_BufferMgr(int _numPages) : hashTable(PF_HASH_TBL_SIZE)
 //
 PF_BufferMgr::~PF_BufferMgr()
 {
-
+  delete pStatisticsMgr;
+  delete[] bufTable;
 }
 
 //
@@ -81,8 +92,17 @@ RC PF_BufferMgr::GetPage(int fd, PageNum pageNum, char **ppBuffer,
 //
 RC PF_BufferMgr::AllocatePage(int fd, PageNum pageNum, char **ppBuffer)
 {
-   
-	return OK_RC;
+  for(int i = 0; i < pageNum; i++) 
+  {
+    if(bufTable[i].pageNum == -1) 
+    {
+      bufTable[i].fd = fd;
+      bufTable[i].pageNum = pageNum;
+      ppBuffer = &bufTable[i].pData;
+	    return OK_RC;
+    }
+  }
+  return PF_NOBUF;
 }
 
 //
@@ -96,7 +116,15 @@ RC PF_BufferMgr::AllocatePage(int fd, PageNum pageNum, char **ppBuffer)
 //
 RC PF_BufferMgr::MarkDirty(int fd, PageNum pageNum)
 {
-	return OK_RC;
+  for(int i = 0; i < pageNum; i++)
+  {
+    if(bufTable[i].pageNum == pageNum && bufTable[i].fd == fd)
+    {
+      bufTable[i].bDirty = 1;
+	    return OK_RC;
+    }
+  }
+  return PF_PAGENOTINBUF; 
 }
 
 //
@@ -109,8 +137,22 @@ RC PF_BufferMgr::MarkDirty(int fd, PageNum pageNum)
 //
 RC PF_BufferMgr::UnpinPage(int fd, PageNum pageNum)
 {
-
-	return OK_RC;
+  for(int i = 0; i < pageNum; i++)
+  {
+    if(bufTable[i].pageNum == pageNum && bufTable[i].fd == fd)
+    {
+      if(bufTable[i].pinCount > 0) 
+      {
+        bufTable[i].pinCount--;
+        return OK_RC;
+      }
+      else
+      {
+        return PF_PAGEUNPINNED;
+      }
+    }
+  }
+	return PF_PAGENOTINBUF;
 }
 
 //
@@ -125,7 +167,25 @@ RC PF_BufferMgr::UnpinPage(int fd, PageNum pageNum)
 //
 RC PF_BufferMgr::FlushPages(int fd)
 {
+  for(int i = 0; i < numPages; i++)
+  {
+    if(bufTable[i].fd == fd)
+    {
+      if(bufTable[i].pinCount > 0) 
+      {
+        return PF_PAGEPINNED;
+        
+      }
+    }
+  }
 
+  for(int i = 0; i < numPages; i++)
+  {
+    if(bufTable[i].fd == fd)
+    {
+     
+    }
+  }
 	return OK_RC;
 }
 
@@ -327,6 +387,7 @@ RC PF_BufferMgr::InitPageDesc(int fd, PageNum pageNum, int slot)
 //
 RC PF_BufferMgr::GetBlockSize(int &length) const
 {
+   length = numPages;
    return OK_RC;
 }
 
