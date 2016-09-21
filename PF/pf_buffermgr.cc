@@ -14,7 +14,6 @@ using namespace std;
 StatisticsMgr *pStatisticsMgr;
 #endif
 
-// LinkList<PF_BufPageDesc> *bufList;
 
 //
 // PF_BufferMgr
@@ -37,15 +36,15 @@ StatisticsMgr *pStatisticsMgr;
 PF_BufferMgr::PF_BufferMgr(int _numPages) : hashTable(PF_HASH_TBL_SIZE)
 {
   pStatisticsMgr = new StatisticsMgr ();
-  //bufList = new LinkList<PF_BufPageDesc> ();
-  //bufList->Append(bufTable);
-  bufTable = new PF_BufPageDesc[numPages]();
-
-  numPages = 0;
-  pageSize = PF_PAGE_SIZE;
-  first = 0;
-  last = 0;
-  free = 0;
+  bufTable = new PF_BufPageDesc[_numPages]();
+  numPages = _numPages;
+  pageSize = PF_PAGE_SIZE + 4;
+  first = -1;
+  last = -1;
+  for(int i = numPages - 1; i >= 0; i--)
+  {
+    InsertFree(i);
+  }
 }
 
 //
@@ -55,7 +54,6 @@ PF_BufferMgr::PF_BufferMgr(int _numPages) : hashTable(PF_HASH_TBL_SIZE)
 //
 PF_BufferMgr::~PF_BufferMgr()
 {
-  delete pStatisticsMgr;
   delete[] bufTable;
 }
 
@@ -77,8 +75,67 @@ PF_BufferMgr::~PF_BufferMgr()
 RC PF_BufferMgr::GetPage(int fd, PageNum pageNum, char **ppBuffer,
       int bMultiplePins)
 {
+  // page in buffer
 
-	return OK_RC;
+  for(int i = 0; i < numPages; i++) 
+  {
+    if(bufTable[i].fd == fd && bufTable[i].pageNum == pageNum) {
+      if(!bMultiplePins && bufTable[i].pinCount > 0)
+      {
+        return PF_PAGEPINNED; 
+      }
+      else 
+      {
+        *ppBuffer = bufTable[i].pData;
+         bufTable[i].pinCount++;
+         LinkHead(i);
+         return OK_RC;
+      }
+    }
+  }
+  // page is not in buffer
+  if(free != -1)
+  {
+    int cur_free = free;
+    bufTable[free].pData = new char[pageSize]();
+    lseek(fd, pageSize * pageNum, sizeof(PF_FileHdr));
+    read(fd, bufTable[free].pData, pageSize);
+    *ppBuffer = bufTable[free].pData;
+    bufTable[free].pageNum = pageNum;
+    bufTable[free].fd = fd;
+    bufTable[free].pinCount++;
+    bufTable[bufTable[free].next].prev = -1;
+    free = bufTable[free].next;
+    LinkHead(cur_free);
+    return OK_RC;
+  }
+  // page is full but has unpinned page
+  else
+  {
+    int slot = last, prev;
+    while(slot != INVALID_SLOT)
+    {
+      prev = bufTable[slot].prev;
+      if(bufTable[slot].pinCount == 0)
+      {
+        if(bufTable[slot].bDirty == 1)
+        {
+          ForcePages(bufTable[slot].fd, bufTable[slot].pageNum);
+        }
+        lseek(fd, pageSize * pageNum, sizeof(PF_FileHdr));
+        read(fd, bufTable[slot].pData, pageSize);
+        *ppBuffer = bufTable[slot].pData;
+        bufTable[slot].pinCount++;
+        LinkHead(slot);
+        return OK_RC;
+      }
+      slot = prev;
+    }
+  }
+
+  // page is full and has not unpinned page
+
+	return PF_NOBUF;
 }
 
 //
@@ -92,16 +149,19 @@ RC PF_BufferMgr::GetPage(int fd, PageNum pageNum, char **ppBuffer,
 //
 RC PF_BufferMgr::AllocatePage(int fd, PageNum pageNum, char **ppBuffer)
 {
-  for(int i = 0; i < pageNum; i++) 
-  {
-    if(bufTable[i].pageNum == -1) 
+  if(free != -1)
     {
-      bufTable[i].fd = fd;
-      bufTable[i].pageNum = pageNum;
-      ppBuffer = &bufTable[i].pData;
-	    return OK_RC;
+      int cur_free = free;
+      bufTable[free].pData = new char[pageSize]();
+      *ppBuffer = bufTable[free].pData;
+      bufTable[free].pageNum = pageNum;
+      bufTable[free].fd = fd;
+      bufTable[free].pinCount++;
+      bufTable[bufTable[free].next].prev = -1;
+      free = bufTable[free].next;
+      LinkHead(cur_free);
+      return OK_RC;
     }
-  }
   return PF_NOBUF;
 }
 
@@ -116,14 +176,19 @@ RC PF_BufferMgr::AllocatePage(int fd, PageNum pageNum, char **ppBuffer)
 //
 RC PF_BufferMgr::MarkDirty(int fd, PageNum pageNum)
 {
-  for(int i = 0; i < pageNum; i++)
+  int slot, next;
+  slot = first;
+  while(slot != INVALID_SLOT)
   {
-    if(bufTable[i].pageNum == pageNum && bufTable[i].fd == fd)
+    next = bufTable[slot].next;
+    if(bufTable[slot].pageNum == pageNum && bufTable[slot].fd == fd)
     {
-      bufTable[i].bDirty = 1;
-	    return OK_RC;
+      bufTable[slot].bDirty = 1;
+      return OK_RC;
     }
+    slot = next;
   }
+
   return PF_PAGENOTINBUF; 
 }
 
@@ -137,21 +202,26 @@ RC PF_BufferMgr::MarkDirty(int fd, PageNum pageNum)
 //
 RC PF_BufferMgr::UnpinPage(int fd, PageNum pageNum)
 {
-  for(int i = 0; i < pageNum; i++)
+  int slot, next;
+  slot = first;
+  while(slot != INVALID_SLOT)
   {
-    if(bufTable[i].pageNum == pageNum && bufTable[i].fd == fd)
+    next = bufTable[slot].next;
+    if(bufTable[slot].pageNum == pageNum && bufTable[slot].fd == fd)
     {
-      if(bufTable[i].pinCount > 0) 
+      if(bufTable[slot].pinCount > 0)
       {
-        bufTable[i].pinCount--;
+        bufTable[slot].pinCount--;
         return OK_RC;
       }
       else
       {
-        return PF_PAGEUNPINNED;
+        return PF_PAGEUNPINNED; 
       }
     }
+    slot = next;
   }
+
 	return PF_PAGENOTINBUF;
 }
 
@@ -178,14 +248,28 @@ RC PF_BufferMgr::FlushPages(int fd)
       }
     }
   }
-
-  for(int i = 0; i < numPages; i++)
+  int slot = first, next;
+  while(slot != INVALID_SLOT)
   {
-    if(bufTable[i].fd == fd)
+    next = bufTable[slot].next;
+    if(bufTable[slot].fd == fd)
     {
-     
+      if(bufTable[slot].bDirty == 1)
+      {
+        ForcePages(bufTable[slot].fd, bufTable[slot].pageNum);
+      }
+      Unlink(slot);
+      InsertFree(slot);
+      delete[] bufTable[slot].pData;
+      bufTable[slot].pData = NULL;
+      bufTable[slot].bDirty = 0;
+      bufTable[slot].pinCount = 0;
+      bufTable[slot].fd = -1;
     }
+    slot = next;
   }
+
+
 	return OK_RC;
 }
 
@@ -201,7 +285,43 @@ RC PF_BufferMgr::FlushPages(int fd)
 //
 RC PF_BufferMgr::ForcePages(int fd, PageNum pageNum)
 {
-	return OK_RC;
+  if(pageNum == ALL_PAGES)
+  {
+    int slot = first, next;
+    while(slot != INVALID_SLOT)
+    {
+      next = bufTable[slot].next;
+      if(bufTable[slot].bDirty == 1)
+      {
+        lseek(fd, pageSize * pageNum, sizeof(PF_FileHdr));
+        write(fd, bufTable[slot].pData, pageSize);
+        bufTable[slot].bDirty = 0;
+      }
+      slot = next;
+    }
+    
+    return OK_RC;
+  }
+  else
+  {
+    int slot = first, next;
+    while(slot != INVALID_SLOT)
+    {
+      next = bufTable[slot].next;
+      if(bufTable[slot].fd == fd && bufTable[slot].pageNum == pageNum)
+      {
+        if(bufTable[slot].bDirty == 1)
+        {
+          lseek(fd, pageSize * pageNum, sizeof(PF_FileHdr));
+          write(fd, bufTable[slot].pData, pageSize);
+          bufTable[slot].bDirty = 0;
+          return OK_RC;
+        }
+      }
+      slot = next;
+    }
+  }
+	return PF_PAGENOTINBUF;
 }
 
 
@@ -255,6 +375,22 @@ RC PF_BufferMgr::PrintBuffer()
 //       is called.
 RC PF_BufferMgr::ClearBuffer()
 {
+   for(int i = 0; i < numPages; i++)
+   {
+      if(bufTable[i].pinCount > 0)
+        return PF_PAGEPINNED;
+   }
+   for(int i = 0; i < numPages; i++)
+   {
+      delete[] bufTable[i].pData;
+      bufTable[i].pData = NULL;
+      bufTable[i].next = -1;
+      bufTable[i].prev = -1;
+      bufTable[i].bDirty = 0;
+      bufTable[i].pinCount = 0;
+      bufTable[i].pageNum = -1;
+      bufTable[i].fd = -1;
+   }
    return OK_RC;
 }
 
@@ -274,6 +410,23 @@ RC PF_BufferMgr::ClearBuffer()
 //
 RC PF_BufferMgr::ResizeBuffer(int iNewSize)
 {
+   if(iNewSize < pageSize)
+   {
+     return PF_NOBUF;
+   }
+   numPages = iNewSize;
+   PF_BufPageDesc* temp = new PF_BufPageDesc[iNewSize]();
+   for(int i = 0; i < iNewSize; i++)
+   {
+     temp[i].pData = bufTable[i].pData;
+     temp[i].next = bufTable[i].next;
+     temp[i].prev = bufTable[i].prev;
+     temp[i].bDirty = bufTable[i].bDirty;
+     temp[i].pinCount = bufTable[i].pinCount;
+     temp[i].pageNum = bufTable[i].pageNum;
+     temp[i].fd = bufTable[i].fd;
+   }
+   bufTable = temp;
    return OK_RC;
 }
 
@@ -287,7 +440,19 @@ RC PF_BufferMgr::ResizeBuffer(int iNewSize)
 //
 RC PF_BufferMgr::InsertFree(int slot)
 {
-
+   if(free == -1)
+   {
+     free = slot;
+     bufTable[slot].next = -1;
+     bufTable[slot].prev = -1;
+   }
+   else
+   {
+     bufTable[free].prev = slot;
+     bufTable[slot].next = free;
+     bufTable[slot].prev = -1;
+     free = slot;
+   }
    // Return ok
    return OK_RC;
 }
@@ -302,7 +467,20 @@ RC PF_BufferMgr::InsertFree(int slot)
 //
 RC PF_BufferMgr::LinkHead(int slot)
 {
-
+   if(first == -1)
+   {
+     first = slot;
+     last = slot;
+     bufTable[slot].prev = -1;
+     bufTable[slot].next = -1;
+   }
+   else
+   {
+    bufTable[first].prev = slot;
+    bufTable[slot].next = first;
+    bufTable[slot].prev = -1;
+    first = slot;
+   }
    // Return ok
    return OK_RC;
 }
@@ -320,6 +498,32 @@ RC PF_BufferMgr::LinkHead(int slot)
 RC PF_BufferMgr::Unlink(int slot)
 {
 
+  int prev = bufTable[slot].prev;
+  int next = bufTable[slot].next;
+  if(prev == -1 && next == -1)
+  {
+    first = -1;
+    last = -1;
+  }
+  else if (prev == -1)
+  {
+    bufTable[next].prev = -1;
+    bufTable[slot].next = -1;
+    first = next;
+  }
+  else if (next == -1)
+  {
+    bufTable[prev].next = -1;
+    bufTable[slot].prev = -1;
+    last = prev;
+  }
+  else
+  {
+    bufTable[prev].next = next;
+    bufTable[next].prev = prev;
+    bufTable[slot].prev = -1;
+    bufTable[slot].next = -1;
+  }
    // Return ok
    return OK_RC;
 }
@@ -337,7 +541,7 @@ RC PF_BufferMgr::Unlink(int slot)
 //
 RC PF_BufferMgr::ReadPage(int fd, PageNum pageNum, char *dest)
 {
-
+    
     return OK_RC;
 }
 
@@ -401,6 +605,7 @@ RC PF_BufferMgr::GetBlockSize(int &length) const
 //
 RC PF_BufferMgr::AllocateBlock(char *&buffer)
 {
+   AllocatePage(MEMORY_FD, numPages, &buffer);
    return OK_RC;
 }
 
@@ -411,5 +616,7 @@ RC PF_BufferMgr::AllocateBlock(char *&buffer)
 //
 RC PF_BufferMgr::DisposeBlock(char* buffer)
 {
+  delete[] buffer;
+  buffer = NULL;
 	return OK_RC;
 }
