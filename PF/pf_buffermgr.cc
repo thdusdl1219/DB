@@ -93,50 +93,20 @@ RC PF_BufferMgr::GetPage(int fd, PageNum pageNum, char **ppBuffer,
          return OK_RC;
       }
     }
-  }
-  // page is not in buffer
-  if(free != -1)
+  } 
+  RC rc;
+  if((rc = AllocatePage(fd, pageNum, ppBuffer)))
   {
-    int cur_free = free;
-    bufTable[free].pData = new char[pageSize]();
-    lseek(fd, pageSize * pageNum, sizeof(PF_FileHdr));
-    read(fd, bufTable[free].pData, pageSize);
-    *ppBuffer = bufTable[free].pData;
-    bufTable[free].pageNum = pageNum;
-    bufTable[free].fd = fd;
-    bufTable[free].pinCount++;
-    bufTable[bufTable[free].next].prev = -1;
-    free = bufTable[free].next;
-    LinkHead(cur_free);
-    return OK_RC;
+    return rc;
   }
-  // page is full but has unpinned page
-  else
+  if((rc = ReadPage(fd, pageNum, *ppBuffer)))
   {
-    int slot = last, prev;
-    while(slot != INVALID_SLOT)
-    {
-      prev = bufTable[slot].prev;
-      if(bufTable[slot].pinCount == 0)
-      {
-        if(bufTable[slot].bDirty == 1)
-        {
-          ForcePages(bufTable[slot].fd, bufTable[slot].pageNum);
-        }
-        lseek(fd, pageSize * pageNum, sizeof(PF_FileHdr));
-        read(fd, bufTable[slot].pData, pageSize);
-        *ppBuffer = bufTable[slot].pData;
-        bufTable[slot].pinCount++;
-        LinkHead(slot);
-        return OK_RC;
-      }
-      slot = prev;
-    }
+    return rc;
   }
-
   // page is full and has not unpinned page
 
-	return PF_NOBUF;
+	return OK_RC;
+  //return PF_NOBUF;
 }
 
 //
@@ -154,10 +124,10 @@ RC PF_BufferMgr::AllocatePage(int fd, PageNum pageNum, char **ppBuffer)
     {
       int cur_free = free;
       bufTable[free].pData = new char[pageSize]();
-      *ppBuffer = bufTable[free].pData;
       bufTable[free].pageNum = pageNum;
       bufTable[free].fd = fd;
       bufTable[free].pinCount++;
+      *ppBuffer = bufTable[free].pData;
       bufTable[bufTable[free].next].prev = -1;
       free = bufTable[free].next;
       LinkHead(cur_free);
@@ -175,7 +145,8 @@ RC PF_BufferMgr::AllocatePage(int fd, PageNum pageNum, char **ppBuffer)
         {
           ForcePages(bufTable[slot].fd, bufTable[slot].pageNum);
         }
-        memset(bufTable[slot].pData, 0, pageSize);
+        delete[] bufTable[slot].pData;
+        bufTable[slot].pData = new char[pageSize]();
         *ppBuffer = bufTable[slot].pData;
         bufTable[slot].pageNum = pageNum;
         bufTable[slot].fd = fd;
@@ -319,8 +290,11 @@ RC PF_BufferMgr::ForcePages(int fd, PageNum pageNum)
       next = bufTable[slot].next;
       if(bufTable[slot].bDirty == 1)
       {
-        lseek(fd, pageSize * pageNum, sizeof(PF_FileHdr));
-        write(fd, bufTable[slot].pData, pageSize);
+        RC rc;
+        if((rc = WritePage(fd, pageNum, bufTable[slot].pData)))
+        {
+          return rc;
+        }
         bufTable[slot].bDirty = 0;
       }
       slot = next;
@@ -338,8 +312,11 @@ RC PF_BufferMgr::ForcePages(int fd, PageNum pageNum)
       {
         if(bufTable[slot].bDirty == 1)
         {
-          lseek(fd, pageSize * pageNum, sizeof(PF_FileHdr));
-          write(fd, bufTable[slot].pData, pageSize);
+          RC rc;
+          if((rc = WritePage(fd, pageNum, bufTable[slot].pData)))
+          {
+            return rc;
+          }
           bufTable[slot].bDirty = 0;
           return OK_RC;
         }
@@ -568,6 +545,11 @@ RC PF_BufferMgr::Unlink(int slot)
 RC PF_BufferMgr::ReadPage(int fd, PageNum pageNum, char *dest)
 {
     
+  lseek(fd, pageSize * pageNum + sizeof(PF_FileHdr), SEEK_SET);
+  if(read(fd, dest, pageSize) < 0){
+    cout << "Some Error in Read : pf_buffermgr.cc:543" << endl;
+    return PF_INCOMPLETEREAD;
+  }
     return OK_RC;
 }
 
@@ -583,7 +565,13 @@ RC PF_BufferMgr::ReadPage(int fd, PageNum pageNum, char *dest)
 //
 RC PF_BufferMgr::WritePage(int fd, PageNum pageNum, char *source)
 {
-    return OK_RC;
+  lseek(fd, pageSize * pageNum + sizeof(PF_FileHdr), SEEK_SET);
+  if(write(fd, source, pageSize) < 0)
+  {
+    cout << "Some Error in Write : pf_buffermgr.cc:571" << endl;
+    return PF_INCOMPLETEWRITE;
+  }
+  return OK_RC;
 }
 
 //
@@ -597,7 +585,13 @@ RC PF_BufferMgr::WritePage(int fd, PageNum pageNum, char *source)
 //
 RC PF_BufferMgr::InitPageDesc(int fd, PageNum pageNum, int slot)
 {
-
+   bufTable[slot].prev = -1;
+   bufTable[slot].next = -1;
+   bufTable[slot].bDirty = 0;
+   bufTable[slot].pData = new char[pageSize];
+   bufTable[slot].pinCount = 1;
+   bufTable[slot].fd = fd;
+   bufTable[slot].pageNum = pageNum;
    // Return ok
    return OK_RC;
 }
