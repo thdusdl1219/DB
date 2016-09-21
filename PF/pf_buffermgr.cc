@@ -41,6 +41,7 @@ PF_BufferMgr::PF_BufferMgr(int _numPages) : hashTable(PF_HASH_TBL_SIZE)
   pageSize = PF_PAGE_SIZE + 4;
   first = -1;
   last = -1;
+  free = -1;
   for(int i = numPages - 1; i >= 0; i--)
   {
     InsertFree(i);
@@ -162,6 +163,30 @@ RC PF_BufferMgr::AllocatePage(int fd, PageNum pageNum, char **ppBuffer)
       LinkHead(cur_free);
       return OK_RC;
     }
+  else
+  {
+    int slot = last, prev;
+    while(slot != INVALID_SLOT)
+    {
+      prev = bufTable[slot].prev;
+      if(bufTable[slot].pinCount == 0)
+      {
+        if(bufTable[slot].bDirty == 1)
+        {
+          ForcePages(bufTable[slot].fd, bufTable[slot].pageNum);
+        }
+        memset(bufTable[slot].pData, 0, pageSize);
+        *ppBuffer = bufTable[slot].pData;
+        bufTable[slot].pageNum = pageNum;
+        bufTable[slot].fd = fd;
+        bufTable[slot].pinCount++;
+        Unlink(slot);
+        LinkHead(slot);
+        return OK_RC;
+      }
+      slot = prev;
+    }
+  }
   return PF_NOBUF;
 }
 
@@ -264,6 +289,7 @@ RC PF_BufferMgr::FlushPages(int fd)
       bufTable[slot].pData = NULL;
       bufTable[slot].bDirty = 0;
       bufTable[slot].pinCount = 0;
+      bufTable[slot].pageNum = -1;
       bufTable[slot].fd = -1;
     }
     slot = next;
