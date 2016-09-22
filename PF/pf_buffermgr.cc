@@ -133,7 +133,6 @@ RC PF_BufferMgr::AllocatePage(int fd, PageNum pageNum, char **ppBuffer)
   if(free != -1)
     {
       int cur_free = free;
-      hashTable.Delete(bufTable[free].fd, bufTable[free].pageNum);
       RC rc;
       if((rc = InitPageDesc(fd, pageNum, free)))
         return rc;
@@ -563,7 +562,7 @@ RC PF_BufferMgr::ReadPage(int fd, PageNum pageNum, char *dest)
   pStatisticsMgr->Register("ReadPage", STAT_ADDONE);
   lseek(fd, pageSize * pageNum + sizeof(PF_FileHdr), SEEK_SET);
   if(read(fd, dest, pageSize) < 0){
-    cout << "Some Error in Read : pf_buffermgr.cc:543" << endl;
+    cout << "Some Error in Read : pf_buffermgr.cc:565" << endl;
     return PF_INCOMPLETEREAD;
   }
     return OK_RC;
@@ -586,7 +585,7 @@ RC PF_BufferMgr::WritePage(int fd, PageNum pageNum, char *source)
   lseek(fd, pageSize * pageNum + sizeof(PF_FileHdr), SEEK_SET);
   if(write(fd, source, pageSize) < 0)
   {
-    cout << "Some Error in Write : pf_buffermgr.cc:571" << endl;
+    cout << "Some Error in Write : pf_buffermgr.cc:588" << endl;
     return PF_INCOMPLETEWRITE;
   }
   return OK_RC;
@@ -642,7 +641,11 @@ RC PF_BufferMgr::GetBlockSize(int &length) const
 //
 RC PF_BufferMgr::AllocateBlock(char *&buffer)
 {
-   AllocatePage(MEMORY_FD, -1, &buffer);
+   static int pageNum = 1;
+   RC rc;
+   if(rc = AllocatePage(MEMORY_FD, pageNum, &buffer))
+     return rc;
+   pageNum++;
    return OK_RC;
 }
 
@@ -653,7 +656,22 @@ RC PF_BufferMgr::AllocateBlock(char *&buffer)
 //
 RC PF_BufferMgr::DisposeBlock(char* buffer)
 {
-  delete[] buffer;
-  buffer = NULL;
-	return OK_RC;
+  int slot = first, next;
+  while(slot != INVALID_SLOT)
+  {
+    next = bufTable[slot].next;
+    if(bufTable[slot].pData == buffer)
+    {
+      Unlink(slot);
+      InsertFree(slot);
+      bufTable[slot].pData = NULL;
+      bufTable[slot].bDirty = 0;
+      bufTable[slot].pinCount = 0;
+      bufTable[slot].pageNum = -1;
+      bufTable[slot].fd = -1;
+      return OK_RC;
+    }
+    slot = next;
+  }
+	return PF_PAGENOTINBUF;
 }
