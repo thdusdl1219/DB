@@ -80,43 +80,41 @@ RC PF_BufferMgr::GetPage(int fd, PageNum pageNum, char **ppBuffer,
   pStatisticsMgr->Register(PF_GETPAGE, STAT_ADDONE);
   pStatisticsMgr->Register("GetPage", STAT_ADDONE);
 
-  int slot = first, next;
-  while(slot != INVALID_SLOT)
+  int slot;
+  RC rc_ = hashTable.Find(fd, pageNum, slot);
+  if(rc_ == OK_RC)
   {
-    next = bufTable[slot].next;
-    if(bufTable[slot].fd == fd && bufTable[slot].pageNum == pageNum)
+    pStatisticsMgr->Register(PF_PAGEFOUND, STAT_ADDONE);
+    pStatisticsMgr->Register("PageFound", STAT_ADDONE);
+    if(!bMultiplePins && bufTable[slot].pinCount > 0)
     {
-      pStatisticsMgr->Register(PF_PAGEFOUND, STAT_ADDONE);
-      pStatisticsMgr->Register("PageFound", STAT_ADDONE);
-      if(!bMultiplePins && bufTable[slot].pinCount > 0)
-      {
-        return PF_PAGEPINNED;
-      }
-      else
-      {
-        *ppBuffer = bufTable[slot].pData;
-        bufTable[slot].pinCount++;
-        Unlink(slot);
-        LinkHead(slot);
-        return OK_RC;
-      }
+      return PF_PAGEPINNED;
     }
-    slot = next;
+    else
+    {
+      *ppBuffer = bufTable[slot].pData;
+      bufTable[slot].pinCount++;
+      Unlink(slot);
+      LinkHead(slot);
+      return OK_RC;
+    }
   }
- 
-  pStatisticsMgr->Register(PF_PAGENOTFOUND, STAT_ADDONE);
-  pStatisticsMgr->Register("PageNotFound", STAT_ADDONE);
-  RC rc;
-  if((rc = AllocatePage(fd, pageNum, ppBuffer)))
-  {
-    return rc;
-  }
-  if((rc = ReadPage(fd, pageNum, *ppBuffer)))
-  {
-    return rc;
-  }
-  // page is full and has not unpinned page
 
+  else
+  {
+    pStatisticsMgr->Register(PF_PAGENOTFOUND, STAT_ADDONE);
+    pStatisticsMgr->Register("PageNotFound", STAT_ADDONE);
+    RC rc;
+    if((rc = AllocatePage(fd, pageNum, ppBuffer)))
+    {
+      return rc;
+    }
+    if((rc = ReadPage(fd, pageNum, *ppBuffer)))
+    {
+      return rc;
+    }
+  // page is full and has not unpinned page
+  }
 	return OK_RC;
   //return PF_NOBUF;
 }
@@ -135,6 +133,7 @@ RC PF_BufferMgr::AllocatePage(int fd, PageNum pageNum, char **ppBuffer)
   if(free != -1)
     {
       int cur_free = free;
+      hashTable.Delete(bufTable[free].fd, bufTable[free].pageNum);
       RC rc;
       if((rc = InitPageDesc(fd, pageNum, free)))
         return rc;
@@ -160,6 +159,7 @@ RC PF_BufferMgr::AllocatePage(int fd, PageNum pageNum, char **ppBuffer)
         delete[] bufTable[slot].pData;
         Unlink(slot);
         RC rc;
+        hashTable.Delete(bufTable[slot].fd, bufTable[slot].pageNum);
         if((rc = InitPageDesc(fd, pageNum, slot)))
           return rc;
         *ppBuffer = bufTable[slot].pData;
@@ -270,6 +270,7 @@ RC PF_BufferMgr::FlushPages(int fd)
       Unlink(slot);
       InsertFree(slot);
       delete[] bufTable[slot].pData;
+      hashTable.Delete(bufTable[slot].fd, bufTable[slot].pageNum);
       bufTable[slot].pData = NULL;
       bufTable[slot].bDirty = 0;
       bufTable[slot].pinCount = 0;
@@ -399,6 +400,7 @@ RC PF_BufferMgr::ClearBuffer()
    for(int i = 0; i < numPages; i++)
    {
       delete[] bufTable[i].pData;
+      hashTable.Delete(bufTable[i].fd, bufTable[i].pageNum);
       bufTable[i].pData = NULL;
       bufTable[i].next = -1;
       bufTable[i].prev = -1;
@@ -606,6 +608,7 @@ RC PF_BufferMgr::InitPageDesc(int fd, PageNum pageNum, int slot)
    bufTable[slot].pinCount++;
    bufTable[slot].fd = fd;
    bufTable[slot].pageNum = pageNum;
+   hashTable.Insert(fd, pageNum, slot);
    // Return ok
    return OK_RC;
 }
