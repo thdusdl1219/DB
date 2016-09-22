@@ -77,23 +77,35 @@ RC PF_BufferMgr::GetPage(int fd, PageNum pageNum, char **ppBuffer,
       int bMultiplePins)
 {
   // page in buffer
+  pStatisticsMgr->Register(PF_GETPAGE, STAT_ADDONE);
+  pStatisticsMgr->Register("GetPage", STAT_ADDONE);
 
-  for(int i = 0; i < numPages; i++) 
+  int slot = first, next;
+  while(slot != INVALID_SLOT)
   {
-    if(bufTable[i].fd == fd && bufTable[i].pageNum == pageNum) {
-      if(!bMultiplePins && bufTable[i].pinCount > 0)
+    next = bufTable[slot].next;
+    if(bufTable[slot].fd == fd && bufTable[slot].pageNum == pageNum)
+    {
+      pStatisticsMgr->Register(PF_PAGEFOUND, STAT_ADDONE);
+      pStatisticsMgr->Register("PageFound", STAT_ADDONE);
+      if(!bMultiplePins && bufTable[slot].pinCount > 0)
       {
-        return PF_PAGEPINNED; 
+        return PF_PAGEPINNED;
       }
-      else 
+      else
       {
-        *ppBuffer = bufTable[i].pData;
-         bufTable[i].pinCount++;
-         LinkHead(i);
-         return OK_RC;
+        *ppBuffer = bufTable[slot].pData;
+        bufTable[slot].pinCount++;
+        Unlink(slot);
+        LinkHead(slot);
+        return OK_RC;
       }
     }
-  } 
+    slot = next;
+  }
+ 
+  pStatisticsMgr->Register(PF_PAGENOTFOUND, STAT_ADDONE);
+  pStatisticsMgr->Register("PageNotFound", STAT_ADDONE);
   RC rc;
   if((rc = AllocatePage(fd, pageNum, ppBuffer)))
   {
@@ -123,12 +135,12 @@ RC PF_BufferMgr::AllocatePage(int fd, PageNum pageNum, char **ppBuffer)
   if(free != -1)
     {
       int cur_free = free;
-      bufTable[free].pData = new char[pageSize]();
-      bufTable[free].pageNum = pageNum;
-      bufTable[free].fd = fd;
-      bufTable[free].pinCount++;
+      RC rc;
+      if((rc = InitPageDesc(fd, pageNum, free)))
+        return rc;
       *ppBuffer = bufTable[free].pData;
-      bufTable[bufTable[free].next].prev = -1;
+      if(bufTable[free].next != -1)
+        bufTable[bufTable[free].next].prev = -1;
       free = bufTable[free].next;
       LinkHead(cur_free);
       return OK_RC;
@@ -146,12 +158,11 @@ RC PF_BufferMgr::AllocatePage(int fd, PageNum pageNum, char **ppBuffer)
           ForcePages(bufTable[slot].fd, bufTable[slot].pageNum);
         }
         delete[] bufTable[slot].pData;
-        bufTable[slot].pData = new char[pageSize]();
-        *ppBuffer = bufTable[slot].pData;
-        bufTable[slot].pageNum = pageNum;
-        bufTable[slot].fd = fd;
-        bufTable[slot].pinCount++;
         Unlink(slot);
+        RC rc;
+        if((rc = InitPageDesc(fd, pageNum, slot)))
+          return rc;
+        *ppBuffer = bufTable[slot].pData;
         LinkHead(slot);
         return OK_RC;
       }
@@ -233,6 +244,8 @@ RC PF_BufferMgr::UnpinPage(int fd, PageNum pageNum)
 //
 RC PF_BufferMgr::FlushPages(int fd)
 {
+  pStatisticsMgr->Register(PF_FLUSHPAGES, STAT_ADDONE);
+  pStatisticsMgr->Register("FlushPage", STAT_ADDONE);
   for(int i = 0; i < numPages; i++)
   {
     if(bufTable[i].fd == fd)
@@ -544,7 +557,8 @@ RC PF_BufferMgr::Unlink(int slot)
 //
 RC PF_BufferMgr::ReadPage(int fd, PageNum pageNum, char *dest)
 {
-    
+  pStatisticsMgr->Register(PF_READPAGE, STAT_ADDONE);
+  pStatisticsMgr->Register("ReadPage", STAT_ADDONE);
   lseek(fd, pageSize * pageNum + sizeof(PF_FileHdr), SEEK_SET);
   if(read(fd, dest, pageSize) < 0){
     cout << "Some Error in Read : pf_buffermgr.cc:543" << endl;
@@ -565,6 +579,8 @@ RC PF_BufferMgr::ReadPage(int fd, PageNum pageNum, char *dest)
 //
 RC PF_BufferMgr::WritePage(int fd, PageNum pageNum, char *source)
 {
+  pStatisticsMgr->Register(PF_WRITEPAGE, STAT_ADDONE);
+  pStatisticsMgr->Register("WritePage", STAT_ADDONE);
   lseek(fd, pageSize * pageNum + sizeof(PF_FileHdr), SEEK_SET);
   if(write(fd, source, pageSize) < 0)
   {
@@ -585,11 +601,9 @@ RC PF_BufferMgr::WritePage(int fd, PageNum pageNum, char *source)
 //
 RC PF_BufferMgr::InitPageDesc(int fd, PageNum pageNum, int slot)
 {
-   bufTable[slot].prev = -1;
-   bufTable[slot].next = -1;
    bufTable[slot].bDirty = 0;
    bufTable[slot].pData = new char[pageSize];
-   bufTable[slot].pinCount = 1;
+   bufTable[slot].pinCount++;
    bufTable[slot].fd = fd;
    bufTable[slot].pageNum = pageNum;
    // Return ok
@@ -625,7 +639,7 @@ RC PF_BufferMgr::GetBlockSize(int &length) const
 //
 RC PF_BufferMgr::AllocateBlock(char *&buffer)
 {
-   AllocatePage(MEMORY_FD, numPages, &buffer);
+   AllocatePage(MEMORY_FD, -1, &buffer);
    return OK_RC;
 }
 

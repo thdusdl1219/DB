@@ -199,7 +199,7 @@ RC TestPF()
 
    if (piPNF && (*piPNF != PF_BUFFER_SIZE)) {
       cout << "Number of pages not found in the buffer is incorrect! (" <<
-        *piPF << ")\n";
+        *piPNF << ")\n";
       // No built in error code for this
       exit(1);
    }

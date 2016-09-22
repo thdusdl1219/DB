@@ -1,6 +1,8 @@
 .*.swp
-build/*
-lib/*
+.*.swo
+build*
+lib*
 core
 *test*
 file*
+tags
