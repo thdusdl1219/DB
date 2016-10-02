@@ -104,6 +104,7 @@ private:
     PF_BufPageDesc *bufTable;                     // info on buffer pages
     PF_HashTable   hashTable;                     // Hash table object
     int            numPages;                      // # of pages in the buffer
+    int            curNumPages;                   // current # of pages in the buffer
     int            pageSize;                      // Size of pages in the buffer
     int            first;                         // MRU page slot
     int            last;                          // LRU page slot
