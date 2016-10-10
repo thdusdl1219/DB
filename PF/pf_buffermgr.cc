@@ -184,17 +184,13 @@ RC PF_BufferMgr::AllocatePage(int fd, PageNum pageNum, char **ppBuffer)
 //
 RC PF_BufferMgr::MarkDirty(int fd, PageNum pageNum)
 {
-  int slot, next;
-  slot = first;
-  while(slot != INVALID_SLOT)
+
+  int slot;
+  RC rc_ = hashTable.Find(fd, pageNum, slot);
+  if(rc_ == OK_RC)
   {
-    next = bufTable[slot].next;
-    if(bufTable[slot].pageNum == pageNum && bufTable[slot].fd == fd)
-    {
-      bufTable[slot].bDirty = 1;
-      return OK_RC;
-    }
-    slot = next;
+    bufTable[slot].bDirty = 1;
+    return OK_RC;
   }
 
   return PF_PAGENOTINBUF; 
@@ -210,24 +206,19 @@ RC PF_BufferMgr::MarkDirty(int fd, PageNum pageNum)
 //
 RC PF_BufferMgr::UnpinPage(int fd, PageNum pageNum)
 {
-  int slot, next;
-  slot = first;
-  while(slot != INVALID_SLOT)
+  int slot;
+  RC rc_ = hashTable.Find(fd, pageNum, slot);
+  if(rc_ == OK_RC)
   {
-    next = bufTable[slot].next;
-    if(bufTable[slot].pageNum == pageNum && bufTable[slot].fd == fd)
+    if(bufTable[slot].pinCount > 0)
     {
-      if(bufTable[slot].pinCount > 0)
-      {
-        bufTable[slot].pinCount--;
-        return OK_RC;
-      }
-      else
-      {
-        return PF_PAGEUNPINNED; 
-      }
+      bufTable[slot].pinCount--;
+      return OK_RC;
     }
-    slot = next;
+    else
+    {
+      return PF_PAGEUNPINNED; 
+    }
   }
 
 	return PF_PAGENOTINBUF;
@@ -634,7 +625,9 @@ RC PF_BufferMgr::InitPageDesc(int fd, PageNum pageNum, int slot)
    bufTable[slot].pinCount++;
    bufTable[slot].fd = fd;
    bufTable[slot].pageNum = pageNum;
-   hashTable.Insert(fd, pageNum, slot);
+   RC rc;
+   if(rc = hashTable.Insert(fd, pageNum, slot))
+     return rc;
    // Return ok
    return OK_RC;
 }
