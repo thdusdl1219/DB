@@ -28,14 +28,15 @@ CFLAGS         = -m32 -g -O1 -Wall $(STATS_OPTION) $(INC_DIRS)
 # The STATS_OPTION can be set to -DPF_STATS or to nothing to turn on and
 # off buffer manager statistics.  The student should not modify this
 # flag at all!
-STATS_OPTION   = -DPF_STATS
+STATS_OPTION   = -DPF_STATS -DPF_LOG
 
 #
 # Students: Please modify SOURCES variables as needed.
 #
 PF_SOURCES     = pf_buffermgr.cc pf_error.cc pf_filehandle.cc \
                  pf_pagehandle.cc pf_hashtable.cc pf_manager.cc \
-                 pf_statistics.cc statistics.cc
+                 pf_statistics.cc statistics.cc \
+								 rm_manager.cc rm_filehandle.cc rm_rid.cc rm_record.cc rm_filescan.cc rm_error.cc
 RM_SOURCES     =
 IX_SOURCES     =
 SM_SOURCES     = #sm_stub.cc printer.cc

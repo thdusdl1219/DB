@@ -22,10 +22,23 @@
 #include "rm_rid.h"
 #include "pf.h"
 
+
+// RM_FileHdr : header format for RM
+struct RM_FileHdr {
+  int recordSize;
+  int numPage;
+  int firstFree;
+};
+
+struct RM_PageHdr {
+  int nextFree;
+};
+
 //
 // RM_Record: RM Record interface
 //
 class RM_Record {
+  friend class RM_FileHandle;
 public:
     RM_Record ();
     ~RM_Record();
@@ -36,12 +49,16 @@ public:
 
     // Return the RID associated with the record
     RC GetRid (RID &rid) const;
+private:
+    char* pData;
+    RID rid;
 };
 
 //
 // RM_FileHandle: RM File interface
 //
 class RM_FileHandle {
+  friend class RM_Manager;
 public:
     RM_FileHandle ();
     ~RM_FileHandle();
@@ -57,6 +74,21 @@ public:
     // Forces a page (along with any contents stored in this class)
     // from the buffer pool to disk.  Default value forces all pages.
     RC ForcePages (PageNum pageNum = ALL_PAGES);
+private:
+    int GetBit(int* map, int index) const;
+    void SetBit(int* map, int index);
+    void UnsetBit(int* map, int index);
+    void XorBit(int* map, int index);
+    int FindFree(int* map) const;
+    bool isEmpty(int* map) const;
+    bool isFull(int* map) const;
+    int* GetMap(char* data) const;
+    RC GetData(PageNum pn, char *&buf) const;
+
+    PF_FileHandle* pfh;
+    RM_FileHdr hdr;
+    int recordNum;
+    int bitmapSize;
 };
 
 //
@@ -91,7 +123,11 @@ public:
     RC OpenFile   (const char *fileName, RM_FileHandle &fileHandle);
 
     RC CloseFile  (RM_FileHandle &fileHandle);
+private:
+    PF_Manager pfm;
+    int recordSize;
 };
+
 
 //
 // Print-error function
