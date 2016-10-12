@@ -15,6 +15,7 @@ RC RM_Record::GetData(char *&pData) const {
 }
 
 RC RM_Record::GetRid(RID &rid) const {
-  rid = this->rid;
+  rid.pn = this->rid->pn;
+  rid.sn = this->rid->sn;
   return (0);
 }

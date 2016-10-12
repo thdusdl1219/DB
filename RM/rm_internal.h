@@ -3,6 +3,9 @@
 #include <cstdio>
 #include <unistd.h>
 #include <fcntl.h>
+#include <iostream>
+
+using namespace std;
 
 #define RM_PAGE_LIST_END -1
 #define RM_PAGE_FULL -2
@@ -18,3 +21,6 @@
 #define RM_OFFSET 405
 #define RM_PAGEEMPTY 406
 #define RM_RECNOTIN 407
+
+
+

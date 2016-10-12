@@ -51,7 +51,7 @@ public:
     RC GetRid (RID &rid) const;
 private:
     char* pData;
-    RID rid;
+    RID* rid;
 };
 
 //
@@ -81,7 +81,7 @@ private:
     void XorBit(int* map, int index);
     int FindFree(int* map) const;
     bool isEmpty(int* map) const;
-    bool isFull(int* map) const;
+    bool isFull(int index) const;
     int* GetMap(char* data) const;
     RC GetData(PageNum pn, char *&buf) const;
 
@@ -89,6 +89,7 @@ private:
     RM_FileHdr hdr;
     int recordNum;
     int bitmapSize;
+    int fd;
 };
 
 //

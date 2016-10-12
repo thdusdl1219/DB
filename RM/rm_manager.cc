@@ -76,6 +76,7 @@ RC RM_Manager::OpenFile(const char *fileName, RM_FileHandle &fileHandle) {
     }
   }
   fileHandle.pfh = pfh;
+  fileHandle.fd = fd;
   fileHandle.bitmapSize = (((RM_PAGE_SIZE / fileHandle.hdr.recordSize) / 8 + 1) / sizeof(int) + 1);
   fileHandle.recordNum = (RM_PAGE_SIZE - fileHandle.bitmapSize * sizeof(int)) / fileHandle.hdr.recordSize;
   return (0);
@@ -85,15 +86,15 @@ err:
 
 RC RM_Manager::CloseFile(RM_FileHandle &fileHandle) {
   int rc;
-  cout << fileHandle.hdr.numPage << endl;
-  /* for(int i = 0; i < fileHandle.hdr.numPage; i++) {
-    if((rc = fileHandle.pfh->UnpinPage(i)))
-      return rc;
-  } */
-  cout << "hi1" << endl;
+
+  lseek(fileHandle.fd, sizeof(PF_FileHdr), L_SET);
+  int numBytes;
+  if((numBytes = write(fileHandle.fd, &fileHandle.hdr, sizeof(RM_FileHdr))) != sizeof(RM_FileHdr)) {
+    return PF_UNIX; 
+  }
+
   if((rc = pfm->CloseFile(*fileHandle.pfh)))
     return (rc);
-  cout << "hi2" << endl;
   return (0);
 }
 
