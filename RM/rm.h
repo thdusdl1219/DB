@@ -124,7 +124,7 @@ public:
 
     RC CloseFile  (RM_FileHandle &fileHandle);
 private:
-    PF_Manager pfm;
+    PF_Manager* pfm;
     int recordSize;
 };
 

@@ -61,8 +61,8 @@ void WriteLog(const char *psMessage)
          if (fLog==NULL) {
             bFound = TRUE;
             fLog = fopen(psFileName,"w");
-         } else
-            delete fLog;
+         } //else
+            // delete fLog;
       }
 
       if (!bFound) {
@@ -145,11 +145,17 @@ PF_BufferMgr::PF_BufferMgr(int _numPages) : hashTable(PF_HASH_TBL_SIZE)
 //
 PF_BufferMgr::~PF_BufferMgr()
 {
+#ifdef PF_LOG
+   char psMessage[100];
+   sprintf (psMessage, "Start Destroyed the buffer manager : %p\n", this);
+   WriteLog(psMessage);
+#endif
    // Free up buffer pages and tables
-   for (int i = 0; i < this->numPages; i++)
+   for (int i = 0; i < this->numPages; i++) {
       delete [] bufTable[i].pData;
-
+   }
    delete [] bufTable;
+
 
 #ifdef PF_STATS
    // Destroy the global statistics manager
@@ -157,7 +163,8 @@ PF_BufferMgr::~PF_BufferMgr()
 #endif
 
 #ifdef PF_LOG
-   WriteLog("Destroyed the buffer manager.\n");
+   sprintf (psMessage, "Destroyed the buffer manager : %p\n", this);
+   WriteLog(psMessage);
 #endif
 }
 

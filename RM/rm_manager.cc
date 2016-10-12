@@ -4,7 +4,8 @@
 using namespace std;
 
 RM_Manager::RM_Manager(PF_Manager &pfm) {
-  this->pfm = pfm;
+  this->pfm = &pfm;
+
 }
 
 RM_Manager::~RM_Manager() {
@@ -17,7 +18,7 @@ RC RM_Manager::CreateFile(const char *fileName, int recordSize) {
   }
   int fd;
   int rc;
-  if((rc = pfm.CreateFile(fileName)))
+  if((rc = pfm->CreateFile(fileName)))
     return rc;
   if((fd = open(fileName,
 #ifdef PC
@@ -50,7 +51,7 @@ RC RM_Manager::CreateFile(const char *fileName, int recordSize) {
 
 RC RM_Manager::DestroyFile(const char* fileName) {
   int rc;
-  if((rc = pfm.DestroyFile(fileName)))
+  if((rc = pfm->DestroyFile(fileName)))
     return rc;
   return (0);
 }
@@ -58,7 +59,7 @@ RC RM_Manager::DestroyFile(const char* fileName) {
 RC RM_Manager::OpenFile(const char *fileName, RM_FileHandle &fileHandle) {
   PF_FileHandle *pfh = new PF_FileHandle();
   int rc, fd;
-  if((rc = pfm.OpenFile(fileName, *pfh)))
+  if((rc = pfm->OpenFile(fileName, *pfh)))
     return (rc);
   if((fd = open(fileName, 
 #ifdef PC
@@ -90,7 +91,7 @@ RC RM_Manager::CloseFile(RM_FileHandle &fileHandle) {
       return rc;
   } */
   cout << "hi1" << endl;
-  if((rc = pfm.CloseFile(*fileHandle.pfh)))
+  if((rc = pfm->CloseFile(*fileHandle.pfh)))
     return (rc);
   cout << "hi2" << endl;
   return (0);
