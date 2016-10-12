@@ -49,6 +49,12 @@ public:
 
     // Return the RID associated with the record
     RC GetRid (RID &rid) const;
+    // for Debug
+#ifdef RM_LOG
+    RC SetRid (RID &rid);
+    RC SetData (char *pData);
+#endif
+
 private:
     char* pData;
     RID* rid;

@@ -201,17 +201,22 @@ RC RM_FileHandle::UpdateRec(const RM_Record &rec) {
   PageNum pn;
   rid.GetPageNum(pn);
   rid.GetSlotNum(sn);
-#ifdef RM_LOG
-   char psMessage[100];
-   sprintf (psMessage, "UpdataRec. (page, slot) : (%d , %d)\n",
-         pn, sn);
-   WriteLog(psMessage);
-#endif
   char *pData;
   int rc;
   if((rc = GetData(pn, pData)))
     return rc;
+#ifdef RM_LOG
+   char psMessage[100];
+   sprintf (psMessage, "UpdataRec. (page, slot, recData) : (%d , %d, %s)\n",
+         pn, sn, recData);
+   WriteLog(psMessage);
+#endif
   int* map = GetMap(pData);
+#ifdef RM_LOG
+   sprintf (psMessage, "UpdateRec. (map[0], map[1], map[2], map[3]) : (%x, %x, %x, %x)\n",
+         map[0], map[1], map[2], map[3]);
+   WriteLog(psMessage);
+#endif
   if(!GetBit(map, sn)) {
     return RM_RECNOTIN;
   }
