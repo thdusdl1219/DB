@@ -55,9 +55,15 @@ RM_FileHandle::RM_FileHandle() {
   pfh = NULL;
   recordNum = -1;
   bitmapSize = -1;
+  totalRecordNum = 0;
 }
 
 RM_FileHandle::~RM_FileHandle() {
+  if(pfh != NULL) {
+    delete pfh; 
+    pfh = NULL;
+  }
+
 }
 
 RC RM_FileHandle::GetRec(const RID &rid, RM_Record &rec) const {
@@ -153,8 +159,6 @@ RC RM_FileHandle::InsertRec(const char *pData, RID &rid) {
          map[0], map[1], map[2], map[3]);
    WriteLog(psMessage);
 #endif 
-  rid.pn = pn;
-  rid.sn = index;
 #ifdef RM_LOG
    sprintf (psMessage, "InsertRec. (page, slot, data) : (%d , %d , %s)\n",
          pn, index, pData);
@@ -164,6 +168,9 @@ RC RM_FileHandle::InsertRec(const char *pData, RID &rid) {
     return rc;
   if((rc = pfh->UnpinPage(pn)))
     return rc;
+  rid.pn = pn;
+  rid.sn = index;
+  totalRecordNum++;
   return (0);  
 }
 
@@ -211,6 +218,7 @@ RC RM_FileHandle::DeleteRec(const RID &rid) {
   }
   if((rc = pfh->UnpinPage(pn)))
     return rc;
+  totalRecordNum--;
   return (0);
 }
 

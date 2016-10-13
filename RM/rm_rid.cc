@@ -14,6 +14,12 @@ RID::RID(PageNum pageNum, SlotNum slotNum) {
 RID::~RID() {
 }
 
+RID& RID::operator=(RID& rid) {
+  pn = rid.pn;
+  sn = rid.sn;
+  return *this;
+}
+
 RC RID::GetPageNum(PageNum &pageNum) const {
   if (pn == -1) 
     return RM_RIDPAGEINVALID;

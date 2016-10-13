@@ -2,6 +2,8 @@
 #include "rm_internal.h"
 
 RM_Record::RM_Record() {
+  pData = NULL;
+  rid = new RID();
 }
 
 RM_Record::~RM_Record() {
@@ -22,7 +24,8 @@ RC RM_Record::GetRid(RID &rid) const {
 
 #ifdef RM_LOG
 RC RM_Record::SetRid(RID &rid)  {
-  this->rid = new RID(rid.pn, rid.sn);
+  this->rid->pn = rid.pn;
+  this->rid->sn = rid.sn;
   return (0);
 }
 

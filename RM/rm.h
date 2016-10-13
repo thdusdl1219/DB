@@ -34,11 +34,14 @@ struct RM_PageHdr {
   int nextFree;
 };
 
+
+
 //
 // RM_Record: RM Record interface
 //
 class RM_Record {
   friend class RM_FileHandle;
+  friend class RM_FileScan;
 public:
     RM_Record ();
     ~RM_Record();
@@ -60,11 +63,17 @@ private:
     RID* rid;
 };
 
+struct ScanRecord {
+  RM_Record cur;
+  struct ScanRecord *next;
+};
+
 //
 // RM_FileHandle: RM File interface
 //
 class RM_FileHandle {
   friend class RM_Manager;
+  friend class RM_FileScan;
 public:
     RM_FileHandle ();
     ~RM_FileHandle();
@@ -95,6 +104,7 @@ private:
     RM_FileHdr hdr;
     int recordNum;
     int bitmapSize;
+    int totalRecordNum;
     int fd;
 };
 
@@ -115,6 +125,14 @@ public:
                   ClientHint pinHint = NO_HINT); // Initialize a file scan
     RC GetNextRec(RM_Record &rec);               // Get next matching record
     RC CloseScan ();                             // Close the scan
+private:
+    RC CheckType(AttrType attrType, int attrLength);
+    bool Operating(AttrType attrType, CompOp compOp, void* value1, void* value2, int n);
+    bool Equal(AttrType attrType, void* value1, void* value2, int n);
+    bool Less(AttrType attrType, void* value1, void* value2, int n);
+    bool Greater(AttrType attrType, void* value1, void* value2, int n);
+    
+    struct ScanRecord* first;
 };
 
 //
