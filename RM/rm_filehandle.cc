@@ -61,12 +61,16 @@ RM_FileHandle::~RM_FileHandle() {
 }
 
 RC RM_FileHandle::GetRec(const RID &rid, RM_Record &rec) const {
+  int rc;
   if(pfh == NULL)
     return RM_OPENFILE;
   SlotNum sn;
   PageNum pn;
-  rid.GetSlotNum(sn);
-  rid.GetPageNum(pn);
+  
+  if((rc = rid.GetSlotNum(sn)))
+    return rc;
+  if((rc = rid.GetPageNum(pn)))
+    return rc;
   PF_PageHandle pf;
 #ifdef RM_LOG
    char psMessage[100];
@@ -74,7 +78,6 @@ RC RM_FileHandle::GetRec(const RID &rid, RM_Record &rec) const {
          pn, sn);
    WriteLog(psMessage);
 #endif
-  int rc;
   char* pData;
   if((rc = GetData(pn, pData))) {
     return rc;
@@ -90,7 +93,8 @@ RC RM_FileHandle::GetRec(const RID &rid, RM_Record &rec) const {
   rec.pData = myData;
   rec.rid = new RID(pn, sn);
 
-  pfh->UnpinPage(pn);
+  if((rc = pfh->UnpinPage(pn)))
+    return rc;
   return (0);
 }
 
@@ -99,10 +103,19 @@ RC RM_FileHandle::InsertRec(const char *pData, RID &rid) {
   int rc;
   PageNum pn;
   char* pageData;
+#ifdef RM_LOG
+   char psMessage[100];
+   sprintf (psMessage, "InsertRec. (hdr.firstFree) : (%d)\n",
+         hdr.firstFree);
+   WriteLog(psMessage);
+#endif
   if(hdr.firstFree == RM_PAGE_LIST_END) {
     hdr.numPage++;
-    pfh->AllocatePage(pf);
-    pf.GetPageNum(pn);
+
+    if((rc = pfh->AllocatePage(pf)))
+      return rc;
+    if((rc = pf.GetPageNum(pn)))
+      return rc;
     if((rc = pf.GetData(pageData)))
       return rc;
     hdr.firstFree = pn;
@@ -131,29 +144,36 @@ RC RM_FileHandle::InsertRec(const char *pData, RID &rid) {
     hdr.firstFree = rph->nextFree;
     rph->nextFree = RM_PAGE_FULL;
   }
-/* #ifdef RM_LOG
-   sprintf (psMessage, "InsertRec. (pageData + offset, pData, recordSize) : (%x, %x, %d)\n",
+#ifdef RM_LOG
+   /*sprintf (psMessage, "InsertRec. (pageData + offset, pData, recordSize) : (%x, %x, %d)\n",
          pageData + offset, pData, hdr.recordSize);
+   WriteLog(psMessage); */
+   sprintf (psMessage, "InsertRec. (map[0], map[1], map[2], map[3]) : (%x, %x, %x, %x)\n",
+         map[0], map[1], map[2], map[3]);
    WriteLog(psMessage);
-#endif */
+#endif 
   rid.pn = pn;
   rid.sn = index;
 #ifdef RM_LOG
-   char psMessage[100];
    sprintf (psMessage, "InsertRec. (page, slot, data) : (%d , %d , %s)\n",
          pn, index, pData);
    WriteLog(psMessage);
 #endif
-  pfh->UnpinPage(pn);
-  pfh->MarkDirty(pn);
+  if((rc = pfh->MarkDirty(pn)))
+    return rc;
+  if((rc = pfh->UnpinPage(pn)))
+    return rc;
   return (0);  
 }
 
 RC RM_FileHandle::DeleteRec(const RID &rid) {
+  int rc;
   SlotNum sn;
   PageNum pn;
-  rid.GetSlotNum(sn);
-  rid.GetPageNum(pn);
+  if((rc = rid.GetSlotNum(sn)))
+    return rc;
+  if((rc = rid.GetPageNum(pn)))
+    return rc;
 #ifdef RM_LOG
    char psMessage[100];
    sprintf (psMessage, "DeleteRec. (page, slot) : (%d , %d)\n",
@@ -161,7 +181,6 @@ RC RM_FileHandle::DeleteRec(const RID &rid) {
    WriteLog(psMessage);
 #endif
   char *pData;
-  int rc;
   if((rc = GetData(pn, pData)))
     return rc;
   int* map = GetMap(pData);
@@ -186,9 +205,11 @@ RC RM_FileHandle::DeleteRec(const RID &rid) {
       rph->nextFree = hdr.firstFree;
       hdr.firstFree = pn;
     }
-    pfh->MarkDirty(pn);
+    if((rc = pfh->MarkDirty(pn)))
+      return rc;
   }
-  pfh->UnpinPage(pn);
+  if((rc = pfh->UnpinPage(pn)))
+    return rc;
   return (0);
 }
 
@@ -271,7 +292,6 @@ int RM_FileHandle::FindFree(int* map) const {
           if(index >= recordNum)
             return -1;
           else {
-            cout << "index : " << index << endl;
             return index; 
           }
         }
