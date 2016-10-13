@@ -7,6 +7,8 @@ RM_Record::RM_Record() {
 }
 
 RM_Record::~RM_Record() {
+  delete [] pData;
+  delete rid;
 }
 
 RC RM_Record::GetData(char *&pData) const {

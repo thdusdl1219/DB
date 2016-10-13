@@ -35,8 +35,8 @@ void WriteLog(const char *psMessage)
          if (fLog==NULL) {
             bFound = TRUE;
             fLog = fopen(psFileName,"w");
-         } //else
-            // delete fLog;
+         } else 
+            fclose(fLog);
       }
 
       if (!bFound) {
@@ -98,7 +98,9 @@ RC RM_FileHandle::GetRec(const RID &rid, RM_Record &rec) const {
   char* myData = new char[hdr.recordSize];
   memcpy(myData, pData + offset, hdr.recordSize);
   rec.pData = myData;
-  rec.rid = new RID(pn, sn);
+  RID *tmpRid = new RID(pn, sn);
+  *rec.rid = *tmpRid;
+  delete tmpRid;
 
   if((rc = pfh->UnpinPage(pn)))
     return rc;

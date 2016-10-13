@@ -133,6 +133,7 @@ private:
     bool Greater(AttrType attrType, void* value1, void* value2, int n);
     
     struct ScanRecord* first;
+    int recordSize;
 };
 
 //

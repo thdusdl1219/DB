@@ -22,4 +22,5 @@ using namespace std;
 #define RM_INDEXINVALID (START_RM_WARN + 6)
 #define RM_RECNOTIN (START_RM_WARN + 7)
 #define RM_TYPEERROR (START_RM_WARN + 8)
+#define RM_NOTOPENSCAN (START_RM_WARN + 9)
 

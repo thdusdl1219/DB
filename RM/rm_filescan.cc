@@ -3,11 +3,15 @@
 
 RM_FileScan::RM_FileScan() {
   first = NULL;
+  recordSize = -1;
 }
 
 RM_FileScan::~RM_FileScan() {
-  if(first != NULL)
+  while(first != NULL) {
+    struct ScanRecord* next = first->next;
     delete first;
+    first = next;
+  }
 }
 
 RC RM_FileScan::OpenScan( const RM_FileHandle &fileHandle, AttrType attrType, int attrLength, int attrOffset, CompOp compOp, void* value, ClientHint pinHint) {
@@ -19,45 +23,62 @@ RC RM_FileScan::OpenScan( const RM_FileHandle &fileHandle, AttrType attrType, in
     int pn = i / fileHandle.recordNum;
     int sn = i % fileHandle.recordNum;
     RID rid(pn, sn);
-    RM_Record rec;
-    if((rc = fileHandle.GetRec(rid, rec)))
+    RM_Record* rec = new RM_Record ();
+    if((rc = fileHandle.GetRec(rid, *rec)))
       return rc;
     char* recData;
-    if((rc = rec.GetData(recData)))
+    if((rc = rec->GetData(recData)))
       return rc;
     char* tmp = new char[attrLength];
     memcpy(tmp, recData + attrOffset, attrLength);
     bool result = false;
     result = Operating(attrType, compOp, tmp, value, attrLength);
-    
+    delete [] tmp; 
     if(result) {
       struct ScanRecord* tmpfirst = first;
       first = new ScanRecord();
-      first->cur.rid = new RID(pn, sn);
+      rec->GetRid(*first->cur.rid);
+      //first->cur.rid = new RID(pn, sn);
       first->cur.pData = recData;
       first->next = tmpfirst; 
     }
+    else {
+      delete rec;
+    }
   }
+  recordSize = fileHandle.hdr.recordSize;
   return (0);
 }
 
 RC RM_FileScan::GetNextRec( RM_Record &rec) {
   RC rc;
+  if(recordSize == -1)
+    return RM_NOTOPENSCAN;
   if(first == NULL)
     return RM_EOF;
+  struct ScanRecord* next = first->next;
+  char* tmp;
+  char* myData = new char[recordSize];
 
-  if((rc = first->cur.GetData(rec.pData)))
+  if((rc = first->cur.GetData(tmp)))
     return rc;
+  memcpy(myData, tmp, recordSize);
+  rec.pData = myData;
   if((rc = first->cur.GetRid(*rec.rid)))
     return rc;
 
-  first = first->next;
+  delete first; 
+  first = next;
   return (0);
 }
 
 RC RM_FileScan::CloseScan() {
-  delete [] first;
-  first = NULL;
+  while(first != NULL) {
+    struct ScanRecord* next = first->next;
+    delete first;
+    first = next;
+  }
+  return (0);
 }
 
 RC RM_FileScan::CheckType(AttrType attrType, int attrLength) {
