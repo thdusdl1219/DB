@@ -141,7 +141,7 @@ RC RM_FileHandle::InsertRec(const char *pData, RID &rid) {
   int index = FindFree(map);
 
   if(index == -1)
-    return RM_INDEXINVALID;
+    return RM_NEEDNEWPAGE;
 
   SetBit(map, index);
 
