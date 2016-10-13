@@ -87,11 +87,7 @@ err:
 RC RM_Manager::CloseFile(RM_FileHandle &fileHandle) {
   int rc;
 
-  lseek(fileHandle.fd, sizeof(PF_FileHdr), L_SET);
-  int numBytes;
-  if((numBytes = write(fileHandle.fd, &fileHandle.hdr, sizeof(RM_FileHdr))) != sizeof(RM_FileHdr)) {
-    return PF_UNIX; 
-  }
+  fileHandle.ForcePages(ALL_PAGES);
 
   if((rc = pfm->CloseFile(*fileHandle.pfh)))
     return (rc);

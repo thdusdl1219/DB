@@ -116,12 +116,6 @@ RC RM_FileHandle::InsertRec(const char *pData, RID &rid) {
     }
   }
   int* map = GetMap(pageData);
-#ifdef RM_LOG
-   char psMessage[100];
-   sprintf (psMessage, "InsertRec. (map[0], map[1], map[2], map[3]) : (%x, %x, %x, %x)\n",
-         map[0], map[1], map[2], map[3]);
-   WriteLog(psMessage);
-#endif
   int index = FindFree(map);
 
   if(index == -1)
@@ -132,14 +126,20 @@ RC RM_FileHandle::InsertRec(const char *pData, RID &rid) {
   int offset = HEADER_SIZE + (index * hdr.recordSize);
   memcpy(pageData + offset, pData, hdr.recordSize);
 
-  if(isFull(index)) {
+  if(isFull(map)) {
     RM_PageHdr* rph = (RM_PageHdr *)pageData;
     hdr.firstFree = rph->nextFree;
     rph->nextFree = RM_PAGE_FULL;
   }
+/* #ifdef RM_LOG
+   sprintf (psMessage, "InsertRec. (pageData + offset, pData, recordSize) : (%x, %x, %d)\n",
+         pageData + offset, pData, hdr.recordSize);
+   WriteLog(psMessage);
+#endif */
   rid.pn = pn;
   rid.sn = index;
 #ifdef RM_LOG
+   char psMessage[100];
    sprintf (psMessage, "InsertRec. (page, slot, data) : (%d , %d , %s)\n",
          pn, index, pData);
    WriteLog(psMessage);
@@ -230,6 +230,13 @@ RC RM_FileHandle::UpdateRec(const RM_Record &rec) {
 }
 
 RC RM_FileHandle::ForcePages(PageNum pageNum) {
+  
+  lseek(fd, sizeof(PF_FileHdr), L_SET);
+  int numBytes;
+  if((numBytes = write(fd, &hdr, sizeof(RM_FileHdr))) != sizeof(RM_FileHdr)) {
+    return PF_UNIX; 
+  }
+
   int rc;
   if((rc = pfh->ForcePages(pageNum)))
     return rc;
@@ -261,7 +268,7 @@ int RM_FileHandle::FindFree(int* map) const {
       for(int j = 0; j < 8 * sizeof(int); j++) {
         int index = i * 8 * sizeof(int) + j; 
         if(!GetBit(map, index)) {
-          if(index > recordNum)
+          if(index >= recordNum)
             return -1;
           else {
             cout << "index : " << index << endl;
@@ -307,8 +314,8 @@ bool RM_FileHandle::isEmpty(int* map) const {
   return true;
 }
 
-bool RM_FileHandle::isFull(int index) const {
-  if(index + 1 >= recordNum)
+bool RM_FileHandle::isFull(int* map) const {
+  if(FindFree(map) == -1)
     return 1;
   return 0;
 }

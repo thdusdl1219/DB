@@ -87,7 +87,7 @@ private:
     void XorBit(int* map, int index);
     int FindFree(int* map) const;
     bool isEmpty(int* map) const;
-    bool isFull(int index) const;
+    bool isFull(int * map) const;
     int* GetMap(char* data) const;
     RC GetData(PageNum pn, char *&buf) const;
 
