@@ -9,7 +9,7 @@ RM_Record::~RM_Record() {
 
 RC RM_Record::GetData(char *&pData) const {
   if(this->pData == NULL)
-    return RM_NULL;
+    return RM_NODATA;
   pData = this->pData;
   return (0);
 }

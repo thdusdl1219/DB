@@ -14,7 +14,7 @@ RM_Manager::~RM_Manager() {
 RC RM_Manager::CreateFile(const char *fileName, int recordSize) {
   if(recordSize > RM_PAGE_SIZE)
   {
-    return RM_RECORDBIG;
+    return RM_RECORDSIZEBIG;
   }
   int fd;
   int rc;

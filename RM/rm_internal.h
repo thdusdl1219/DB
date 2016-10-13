@@ -13,14 +13,13 @@ using namespace std;
 
 #define M_SET 0
 
-#define RM_EOF 400
-#define RM_RECORDBIG 401
-#define RM_OPENFILE 402
-#define RM_NULL 403
-#define RM_RID 404
-#define RM_OFFSET 405
-#define RM_PAGEEMPTY 406
-#define RM_RECNOTIN 407
-
+#define RM_EOF (START_RM_WARN + 0)
+#define RM_RECORDSIZEBIG (START_RM_WARN + 1)
+#define RM_FILENOTOPEN (START_RM_WARN + 2)
+#define RM_NODATA (START_RM_WARN + 3)
+#define RM_RIDPAGEINVALID (START_RM_WARN + 4)
+#define RM_RIDSLOTINVALID (START_RM_WARN + 5)
+#define RM_INDEXINVALID (START_RM_WARN + 6)
+#define RM_RECNOTIN (START_RM_WARN + 7)
 
 

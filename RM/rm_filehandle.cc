@@ -63,7 +63,7 @@ RM_FileHandle::~RM_FileHandle() {
 RC RM_FileHandle::GetRec(const RID &rid, RM_Record &rec) const {
   int rc;
   if(pfh == NULL)
-    return RM_OPENFILE;
+    return RM_FILENOTOPEN;
   SlotNum sn;
   PageNum pn;
   
@@ -83,8 +83,9 @@ RC RM_FileHandle::GetRec(const RID &rid, RM_Record &rec) const {
     return rc;
   }
 
-  if(isEmpty(GetMap(pData))) {
-    return RM_PAGEEMPTY;
+  int* map = GetMap(pData);
+  if(!GetBit(map, sn)) {
+    return RM_RECNOTIN;
   }
 
   int offset = HEADER_SIZE + hdr.recordSize * sn;
@@ -132,7 +133,7 @@ RC RM_FileHandle::InsertRec(const char *pData, RID &rid) {
   int index = FindFree(map);
 
   if(index == -1)
-    return RM_OFFSET;
+    return RM_INDEXINVALID;
 
   SetBit(map, index);
 

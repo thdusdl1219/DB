@@ -16,14 +16,14 @@ RID::~RID() {
 
 RC RID::GetPageNum(PageNum &pageNum) const {
   if (pn == -1) 
-    return RM_RID;
+    return RM_RIDPAGEINVALID;
   pageNum = pn; 
   return (0);
 }
 
 RC RID::GetSlotNum(SlotNum &slotNum) const {
   if(sn == -1)
-    return RM_RID;
+    return RM_RIDSLOTINVALID;
   slotNum = sn;
   return (0);
 }
