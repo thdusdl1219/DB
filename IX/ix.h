@@ -13,10 +13,21 @@
 #include "rm_rid.h"  // Please don't change these lines
 #include "pf.h"
 
+// IX_FileHdr
+// file을 위한 헤더
+//
+struct IX_FileHdr {
+  PageNum firstFree;
+  AttrType attrType;
+  int attrLength;
+};
+
+
 //
 // IX_IndexHandle: IX Index File interface
 //
 class IX_IndexHandle {
+    friend class IX_Manager;
 public:
     IX_IndexHandle();
     ~IX_IndexHandle();
@@ -29,6 +40,10 @@ public:
 
     // Force index files to disk
     RC ForcePages();
+private:
+    PF_FileHandle pfFileHandle;
+    IX_FileHdr fileHdr;
+    int bHdrChanged;
 };
 
 //
@@ -74,11 +89,19 @@ public:
 
     // Close an Index
     RC CloseIndex(IX_IndexHandle &indexHandle);
+private:
+    RC CheckType(AttrType attrType, int attrLength);
+    char* MakeName(const char* fileName, int indexNo);
+    PF_Manager* pPfm;
 };
 
 //
 // Print-error function
 //
 void IX_PrintError(RC rc);
+
+
+#define IX_TYPEERROR 1
+#define IX_NULLPOINTER 2
 
 #endif
