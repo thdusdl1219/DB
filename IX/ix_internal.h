@@ -11,6 +11,8 @@ const int IX_HEADER_PAGE_NUM = 0;
 #define IX_PAGE_LIST_END  -1
 #define IX_PAGE_FULL      -2
 
+#define IX_NODE_END      -1
+
 struct IX_PageHdr {
   PageNum nextFree;
 };

@@ -103,5 +103,8 @@ void IX_PrintError(RC rc);
 
 #define IX_TYPEERROR 1
 #define IX_NULLPOINTER 2
+#define IX_OVERFLOW 3
+#define IX_EOF 4
+
 
 #endif
