@@ -168,9 +168,6 @@ char* IX_Manager::MakeName(const char* fileName, int indexNo) {
 RC IX_Manager::CheckType(AttrType attrType, int attrLength) {
   switch(attrType) {
     case INT :
-      if(attrLength != 4)
-        return IX_TYPEERROR;
-      break;
     case FLOAT :
       if(attrLength != 4)
         return IX_TYPEERROR;

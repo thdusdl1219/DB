@@ -19,6 +19,9 @@ RC IX_IndexHandle::InsertEntry(void *pData, const RID &rid) {
   IX_BpTreeEntry<int> e1;
   IX_BpTreeEntry<float> e2;
   IX_BpTreeEntry<char> e3;
+  IX_BpTreeEntry<int> *c1 = NULL;
+  IX_BpTreeEntry<float> *c2 = NULL;
+  IX_BpTreeEntry<char> *c3 = NULL;
 
   if(pData == NULL)
     return IX_NULLPOINTER;
@@ -28,14 +31,13 @@ RC IX_IndexHandle::InsertEntry(void *pData, const RID &rid) {
   memcpy(newData, pData, fileHdr.attrLength);
 
 
-
   switch(fileHdr.attrType) {
     case INT:
       if(intt == NULL)
         intt = new IX_BpTree<int>(this->pfFileHandle, this->fileHdr.attrType, this->fileHdr.attrLength);
       e1.rid = rid;
       e1.key = (int*) newData;
-      if((rc = intt->Insert(NULL, &e1, NULL)))
+      if((rc = intt->Insert(NULL, &e1, &c1)))
         return rc;
       break;
     case FLOAT:
@@ -43,7 +45,7 @@ RC IX_IndexHandle::InsertEntry(void *pData, const RID &rid) {
         floatt = new IX_BpTree<float>(this->pfFileHandle, this->fileHdr.attrType, this->fileHdr.attrLength);
       e2.rid = rid;
       e2.key = (float*) newData;
-      if((rc = floatt->Insert(NULL, &e2, NULL)))
+      if((rc = floatt->Insert(NULL, &e2, &c2)))
         return rc;
       break;
     case STRING:
@@ -51,7 +53,7 @@ RC IX_IndexHandle::InsertEntry(void *pData, const RID &rid) {
         chart = new IX_BpTree<char>(this->pfFileHandle, this->fileHdr.attrType, this->fileHdr.attrLength);
       e3.rid = rid;
       e3.key = (char*) newData;
-      if((rc = chart->Insert(NULL, &e3, NULL)))
+      if((rc = chart->Insert(NULL, &e3, &c3)))
         return rc;
       break;
   }

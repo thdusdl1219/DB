@@ -30,6 +30,7 @@ template<typename T> class IX_BpTree;
 //
 class IX_IndexHandle {
     friend class IX_Manager;
+    friend class IX_IndexScan;
 public:
     IX_IndexHandle();
     ~IX_IndexHandle();
@@ -71,6 +72,15 @@ public:
 
     // Close index scan
     RC CloseScan();
+private:
+    RC Find(void *value);
+    int bScanOpen;
+    IX_IndexHandle* pIndexHandle;
+    CompOp compOp;
+    void* value;
+    IX_BpTree<int>* intt;
+    IX_BpTree<float>* floatt;
+    IX_BpTree<char>* chart;
 };
 
 //
@@ -110,6 +120,10 @@ void IX_PrintError(RC rc);
 #define IX_NULLPOINTER 2
 #define IX_OVERFLOW 3
 #define IX_EOF 4
-
+#define IX_SCANOPEN 5
+#define IX_CLOSEDFILE 6
+#define IX_INVALIDCOMPOP 7
+#define IX_CLOSEDSCAN 8
+#define IX_SAMEINDEX 9
 
 #endif
