@@ -34,7 +34,7 @@ RC IX_IndexHandle::InsertEntry(void *pData, const RID &rid) {
   switch(fileHdr.attrType) {
     case INT:
       if(intt == NULL)
-        intt = new IX_BpTree<int>(this->pfFileHandle, this->fileHdr.attrType, this->fileHdr.attrLength);
+        intt = new IX_BpTree<int>(&this->pfFileHandle, this->fileHdr.attrType, this->fileHdr.attrLength);
       e1.rid = rid;
       e1.key = (int*) newData;
       if((rc = intt->Insert(NULL, &e1, &c1)))
@@ -42,7 +42,7 @@ RC IX_IndexHandle::InsertEntry(void *pData, const RID &rid) {
       break;
     case FLOAT:
       if(floatt == NULL)
-        floatt = new IX_BpTree<float>(this->pfFileHandle, this->fileHdr.attrType, this->fileHdr.attrLength);
+        floatt = new IX_BpTree<float>(&this->pfFileHandle, this->fileHdr.attrType, this->fileHdr.attrLength);
       e2.rid = rid;
       e2.key = (float*) newData;
       if((rc = floatt->Insert(NULL, &e2, &c2)))
@@ -50,7 +50,7 @@ RC IX_IndexHandle::InsertEntry(void *pData, const RID &rid) {
       break;
     case STRING:
       if(chart == NULL)
-        chart = new IX_BpTree<char>(this->pfFileHandle, this->fileHdr.attrType, this->fileHdr.attrLength);
+        chart = new IX_BpTree<char>(&this->pfFileHandle, this->fileHdr.attrType, this->fileHdr.attrLength);
       e3.rid = rid;
       e3.key = (char*) newData;
       if((rc = chart->Insert(NULL, &e3, &c3)))

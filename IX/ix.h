@@ -73,7 +73,9 @@ public:
     // Close index scan
     RC CloseScan();
 private:
-    RC Find(void *value);
+    RC Find(RID& rid);
+    RC Operation(RID& rid, char* pData);
+    int Compare(void* key1, void* key2);
     int bScanOpen;
     IX_IndexHandle* pIndexHandle;
     CompOp compOp;
@@ -81,6 +83,9 @@ private:
     IX_BpTree<int>* intt;
     IX_BpTree<float>* floatt;
     IX_BpTree<char>* chart;
+    PageNum curPageNum;
+    SlotNum curSlotNum;
+    int attrLength;
 };
 
 //
@@ -116,14 +121,16 @@ private:
 void IX_PrintError(RC rc);
 
 
-#define IX_TYPEERROR 1
-#define IX_NULLPOINTER 2
-#define IX_OVERFLOW 3
-#define IX_EOF 4
-#define IX_SCANOPEN 5
-#define IX_CLOSEDFILE 6
-#define IX_INVALIDCOMPOP 7
-#define IX_CLOSEDSCAN 8
-#define IX_SAMEINDEX 9
+#define IX_TYPEERROR 1111
+#define IX_NULLPOINTER 1112
+#define IX_OVERFLOW 1113
+#define IX_EOF 1114
+#define IX_SCANOPEN 1115
+#define IX_CLOSEDFILE 1116
+#define IX_INVALIDCOMPOP 1117
+#define IX_CLOSEDSCAN 1118
+#define IX_SAMEINDEX 1119
+#define IX_SOMETHINGWRONG 1120
+#define IX_NEOP 1121
 
 #endif
