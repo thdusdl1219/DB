@@ -1,10 +1,12 @@
-#include "ix_internal.h"
 #include "ix_bptree.h"
 
 IX_IndexHandle::IX_IndexHandle() {
   bHdrChanged = FALSE;
   memset(&fileHdr, 0, sizeof(fileHdr));
   fileHdr.firstFree = IX_PAGE_LIST_END;
+  intt = NULL;
+  floatt = NULL;
+  chart = NULL;
 }
 
 IX_IndexHandle::~IX_IndexHandle() {
@@ -12,36 +14,45 @@ IX_IndexHandle::~IX_IndexHandle() {
 }
 
 RC IX_IndexHandle::InsertEntry(void *pData, const RID &rid) {
+  RC rc;
   PF_PageHandle pageHandle;
   IX_BpTreeEntry<int> e1;
   IX_BpTreeEntry<float> e2;
   IX_BpTreeEntry<char> e3;
-  IX_BpTree<int> *a;
-  IX_BpTree<float> *b;
-  IX_BpTree<char> *c;
 
   if(pData == NULL)
     return IX_NULLPOINTER;
 
 
+  char* newData = new char[fileHdr.attrLength];
+  memcpy(newData, pData, fileHdr.attrLength);
+
+
+
   switch(fileHdr.attrType) {
     case INT:
-      a = new IX_BpTree<int>(this->pfFileHandle, this->fileHdr.attrType, this->fileHdr.attrLength);
+      if(intt == NULL)
+        intt = new IX_BpTree<int>(this->pfFileHandle, this->fileHdr.attrType, this->fileHdr.attrLength);
       e1.rid = rid;
-      e1.key = (int*) pData;
-      a->Insert(NULL, &e1, NULL); 
+      e1.key = (int*) newData;
+      if((rc = intt->Insert(NULL, &e1, NULL)))
+        return rc;
       break;
     case FLOAT:
-      b = new IX_BpTree<float>(this->pfFileHandle, this->fileHdr.attrType, this->fileHdr.attrLength);
+      if(floatt == NULL)
+        floatt = new IX_BpTree<float>(this->pfFileHandle, this->fileHdr.attrType, this->fileHdr.attrLength);
       e2.rid = rid;
-      e2.key = (float*) pData;
-      b->Insert(NULL, &e2, NULL);
+      e2.key = (float*) newData;
+      if((rc = floatt->Insert(NULL, &e2, NULL)))
+        return rc;
       break;
     case STRING:
-      c = new IX_BpTree<char>(this->pfFileHandle, this->fileHdr.attrType, this->fileHdr.attrLength);
+      if(chart == NULL)
+        chart = new IX_BpTree<char>(this->pfFileHandle, this->fileHdr.attrType, this->fileHdr.attrLength);
       e3.rid = rid;
-      e3.key = (char*) pData;
-      c->Insert(NULL, &e3, NULL);
+      e3.key = (char*) newData;
+      if((rc = chart->Insert(NULL, &e3, NULL)))
+        return rc;
       break;
   }
   return (0);

@@ -23,6 +23,8 @@ struct IX_FileHdr {
 };
 
 
+template<typename T> class IX_BpTree;
+
 //
 // IX_IndexHandle: IX Index File interface
 //
@@ -44,6 +46,9 @@ private:
     PF_FileHandle pfFileHandle;
     IX_FileHdr fileHdr;
     int bHdrChanged;
+    IX_BpTree<int>* intt;
+    IX_BpTree<float>* floatt;
+    IX_BpTree<char>* chart;
 };
 
 //

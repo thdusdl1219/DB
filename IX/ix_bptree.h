@@ -7,6 +7,12 @@
 
 template <typename T>
 struct IX_BpTreeEntry {
+  IX_BpTreeEntry() {
+    key = NULL;
+  }
+  ~IX_BpTreeEntry() {
+    delete[] key;
+  }
   T* key;
   RID rid;
 };
@@ -105,7 +111,7 @@ public:
 
     entry.rid = RID(pn, sn);
     entry.key = (T*)(new char[attrLength]);
-    memcpy(entry.key, pData + slot * IX_BPTREE_ENTRY_SIZE, attrLength);
+    memcpy(entry.key, pData + slot * IX_BPTREE_ENTRY_SIZE + IX_BPTREE_HEADER_SIZE, attrLength);
     if((rc = pfFileHandle.UnpinPage(pageNum)))
       return rc;
 
@@ -121,13 +127,13 @@ public:
     if(nodeHdr.fullCount <= nodeHdr.count)
       return IX_OVERFLOW;
 
-    IX_BpTreeEntry<T> e;
     for(i = 0; i < nodeHdr.count; i++) {
+      IX_BpTreeEntry<T> e;
       getData(i, e);
-      if(findGreat(e.key, entry.key))
+      if(findGreat(e.key, entry.key)) {
         break;
+      }
     }
-    i = i + 1;
 
     if((rc = pfFileHandle.GetThisPage(pageNum, pageHandle)))
       return rc;
@@ -137,8 +143,19 @@ public:
       return rc;
     }
 
-    memcpy(pData + (i + 1) * IX_BPTREE_ENTRY_SIZE + IX_BPTREE_HEADER_SIZE, pData + i * IX_BPTREE_ENTRY_SIZE + IX_BPTREE_HEADER_SIZE, IX_BPTREE_ENTRY_SIZE * (nodeHdr.count - i));
-    memcpy(pData + i * IX_BPTREE_ENTRY_SIZE + IX_BPTREE_HEADER_SIZE, &entry, IX_BPTREE_ENTRY_SIZE);
+    if(nodeHdr.count > 0) {
+      memcpy(pData + (i + 1) * IX_BPTREE_ENTRY_SIZE + IX_BPTREE_HEADER_SIZE, pData + i * IX_BPTREE_ENTRY_SIZE + IX_BPTREE_HEADER_SIZE, IX_BPTREE_ENTRY_SIZE * (nodeHdr.count - i));
+      memcpy(pData + i * IX_BPTREE_ENTRY_SIZE + IX_BPTREE_HEADER_SIZE, entry.key, attrLength);
+      memcpy(pData + attrLength + i * IX_BPTREE_ENTRY_SIZE + IX_BPTREE_HEADER_SIZE, &entry.rid, sizeof(RID));
+
+    }
+    else {
+      memcpy(pData + IX_BPTREE_HEADER_SIZE, entry.key, attrLength);
+      memcpy(pData + attrLength + IX_BPTREE_HEADER_SIZE, &entry.rid, sizeof(RID));
+    }
+    nodeHdr.count++;
+
+    memcpy(pData, &nodeHdr, IX_BPTREE_HEADER_SIZE);
 
     if((rc = pfFileHandle.MarkDirty(pageNum))) {
       pfFileHandle.UnpinPage(pageNum);
@@ -164,7 +181,7 @@ private:
         cmp = memcmp(key1, key2, attrLength);
         break;
     }
-    if(cmp >= 0)
+    if(cmp > 0)
       return 1;
     return 0;
   }
@@ -180,7 +197,6 @@ template<typename T>
 class IX_BpTree {
 public:
   IX_BpTree(PF_FileHandle& pfFileHandle, AttrType attrType, int attrLength) {
-    this->pfFileHandle = pfFileHandle;
     this->attrLength = attrLength;
     this->attrType = attrType;
     PageNum pageNum;
@@ -189,6 +205,8 @@ public:
     pageHandle.GetPageNum(pageNum);
     this->root = new IX_BpTreeNode<T>(pageNum, pfFileHandle, 1, attrLength, attrType);
     this->root->save();
+    pfFileHandle.UnpinPage(pageNum);
+    this->pfFileHandle = pfFileHandle;
   }
   RC Insert(IX_BpTreeNode<T>* nodepointer, IX_BpTreeEntry<T>* entry, IX_BpTreeEntry<T>* newchildentry) {
     RC rc;
@@ -200,12 +218,20 @@ public:
     }
     if(!nodepointer->nodeHdr.isLeaf) {
       IX_BpTreeEntry<T> tmpentry;
-      for(int i = 0; i < nodepointer->nodeHdr.count; i++) {
+      int i = 0;
+      for(i = 0; i < nodepointer->nodeHdr.count; i++) {
         nodepointer->getData(i, tmpentry);
-        if(findGreat(tmpentry.key, entry->key))
-           break;
+        if(findGreat(tmpentry.key, entry->key)) {
+          break;
+        }
       }
-      tmpentry.rid.GetPageNum(pageNum); 
+      i = i - 1;
+      if(i == -1)
+        pageNum = nodepointer->nodeHdr.seqPointer;
+      else {
+        nodepointer->getData(i, tmpentry);
+        tmpentry.rid.GetPageNum(pageNum); 
+      }
       IX_BpTreeNode<T>* newTree = new IX_BpTreeNode<T>(pageNum, pfFileHandle, 0, attrLength, attrType);
       if((rc = newTree->load()))
         return rc;
@@ -222,19 +248,22 @@ public:
         }
         else { // no space
           //split
-          IX_BpTreeNode<T>* newnode = NULL;
-          Split(nodepointer, newnode, 0);
+          IX_BpTreeNode<T> *newnode = NULL;
+          if((rc = Split(nodepointer, &newnode, 0)))
+            return rc;
           newchildentry->rid.GetPageNum(pageNum);
           newnode->nodeHdr.seqPointer = pageNum;
           newchildentry->key = entry->key;
           newchildentry->rid = RID(newnode->pageNum, 0);
-          delete newnode;
           if(nodepointer == root) {
-            pfFileHandle.AllocatePage(pageHandle);
+            if((rc = pfFileHandle.AllocatePage(pageHandle)))
+              return rc;
             pageHandle.GetPageNum(pageNum);
             IX_BpTreeNode<T>* newroot = new IX_BpTreeNode<T>(pageNum, pfFileHandle, 0, attrLength, attrType);
             newroot->nodeHdr.seqPointer = root->pageNum;
             newroot->save();
+            if((rc = pfFileHandle.UnpinPage(pageNum)))
+              return rc;
             newroot->setData(*newchildentry);
             delete newchildentry;
             newchildentry = NULL;
@@ -253,7 +282,8 @@ public:
       else { // split
         IX_BpTreeNode<T>* newnode = NULL;
         IX_BpTreeEntry<T>* e = new IX_BpTreeEntry<T>();
-        Split(nodepointer, newnode, 1);
+        if((rc = Split(nodepointer, &newnode, 1)))
+          return rc;
         newnode->setData(*entry);
         newnode->getData(0, *e);
         e->rid = RID(newnode->pageNum, 0);
@@ -272,20 +302,22 @@ public:
           newnode->nodeHdr.seqPointer = nodepointer->pageNum;
           newnode->nodeHdr.next = nextNode.pageNum;
         }
-
+        delete newnode;
         if(nodepointer == root) {
-          pfFileHandle.AllocatePage(pageHandle);
+          if((rc = pfFileHandle.AllocatePage(pageHandle)))
+            return rc;
           pageHandle.GetPageNum(pageNum);
           IX_BpTreeNode<T>* newroot = new IX_BpTreeNode<T>(pageNum, pfFileHandle, 0, attrLength, attrType);
           newroot->nodeHdr.seqPointer = root->pageNum;
           newroot->save();
+          if((rc = pfFileHandle.UnpinPage(pageNum)))
+            return rc;
           newroot->setData(*newchildentry);
           delete newchildentry;
           newchildentry = NULL;
           delete root;
           root = newroot;
         }
-        delete newnode;
       }
     }
     return (0);
@@ -295,20 +327,23 @@ public:
 
   }
 private:
-  RC Split(IX_BpTreeNode<T>* nodepointer, IX_BpTreeNode<T>* newnode, int isLeaf) {
+  RC Split(IX_BpTreeNode<T>* nodepointer, IX_BpTreeNode<T>** newnode, int isLeaf) {
     PageNum pageNum;
     RC rc;
     PF_PageHandle pageHandle;
-    pfFileHandle.AllocatePage(pageHandle);
+    if((rc = pfFileHandle.AllocatePage(pageHandle)))
+      return rc;
     pageHandle.GetPageNum(pageNum);
-    newnode = new IX_BpTreeNode<T>(pageNum, pfFileHandle, isLeaf, attrLength, attrType);
-    if((rc = newnode->save()))
+    *newnode = new IX_BpTreeNode<T>(pageNum, pfFileHandle, isLeaf, attrLength, attrType);
+    if((rc = (*newnode)->save()))
+      return rc;
+    if((rc = pfFileHandle.UnpinPage(pageNum)))
       return rc;
     int d = nodepointer->nodeHdr.fullCount / 2;
     for(int i = d; i < nodepointer->nodeHdr.count; i++) {
       IX_BpTreeEntry<T> e; 
       nodepointer->getData(i, e);
-      newnode->setData(e);
+      (*newnode)->setData(e);
     }
     nodepointer->nodeHdr.count = d;
     return (0);
@@ -326,7 +361,7 @@ private:
         cmp = memcmp(key1, key2, attrLength);
         break;
     }
-    if(cmp >= 0)
+    if(cmp > 0)
       return 1;
     return 0;
   }

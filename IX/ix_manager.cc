@@ -54,7 +54,7 @@ RC IX_Manager::CreateIndex(const char *fileName, int indexNo, AttrType attrType,
   if((rc = pPfm->CloseFile(pfFileHandle)))
     goto err_destroy;
 
-  delete real_fileName;
+  delete[] real_fileName;
   return (0);
 
 err_unpin:
@@ -72,9 +72,12 @@ RC IX_Manager::DestroyIndex(const char* fileName, int indexNo) {
   RC rc;
   char* r_filename = MakeName(fileName, indexNo);
 
-  if((rc = pPfm->DestroyFile(r_filename)))
+  if((rc = pPfm->DestroyFile(r_filename))) {
+    delete[] r_filename;
     return rc;
+  }
 
+  delete[] r_filename;
   return (0);
 }
 
