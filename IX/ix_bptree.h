@@ -144,12 +144,10 @@ public:
     }
 
     if((rc = pfFileHandle->GetThisPage(pageNum, pageHandle)))
-      return rc;
+      goto err_return;
 
-    if((rc = pageHandle.GetData(pData))) {
-      pfFileHandle->UnpinPage(pageNum);
-      return rc;
-    }
+    if((rc = pageHandle.GetData(pData)))
+      goto err_unpin;
 
     if(nodeHdr.count > 0) {
       if(i != nodeHdr.count) {
@@ -170,15 +168,67 @@ public:
 
     memcpy(pData, &nodeHdr, IX_BPTREE_HEADER_SIZE);
 
-    if((rc = pfFileHandle->MarkDirty(pageNum))) {
-      pfFileHandle->UnpinPage(pageNum);
-      return rc;
-    }
+    if((rc = pfFileHandle->MarkDirty(pageNum))) 
+      goto err_unpin;
 
     if((rc = pfFileHandle->UnpinPage(pageNum)))
-      return rc;
+      goto err_return;
 
     return (0);
+err_unpin:
+  pfFileHandle->UnpinPage(pageNum);
+err_return:
+  return (rc);
+  }
+  RC deleteData(IX_BpTreeEntry<T>* entry) {
+    RC rc;
+    PF_PageHandle pageHandle;
+    char* pData;
+    int i = 0;
+
+    for(i = 0; i < nodeHdr.count; i++) {
+      IX_BpTreeEntry<T> e;
+      getData(i, e);
+      int ret = findGreat(e.key, entry->key);
+      if(ret == 2 && e == *entry)
+        break;
+      else if(ret == 1)
+        return IX_NOENTRY;
+    }
+
+    if(i == nodeHdr.count)
+      return IX_NOENTRY;
+
+    if((rc = pfFileHandle->GetThisPage(pageNum, pageHandle)))
+      goto err_return;
+
+    if((rc = pageHandle.GetData(pData)))
+      goto err_unpin;
+
+    if(nodeHdr.count > 0) {
+      int cpylen = IX_BPTREE_ENTRY_SIZE * (nodeHdr.count - (i + 1));
+      char* buf = new char[cpylen];
+      memcpy(buf, pData + (i + 1) * IX_BPTREE_ENTRY_SIZE + IX_BPTREE_HEADER_SIZE, cpylen);
+      memcpy(pData + i * IX_BPTREE_ENTRY_SIZE + IX_BPTREE_HEADER_SIZE, buf, cpylen);
+    }
+    else {
+      return IX_NOENTRY;
+    }
+    nodeHdr.count--;
+
+    memcpy(pData, &nodeHdr, IX_BPTREE_HEADER_SIZE);
+
+    if((rc = pfFileHandle->MarkDirty(pageNum)))
+      goto err_unpin;
+
+    if((rc = pfFileHandle->UnpinPage(pageNum)))
+      goto err_return;
+
+    return (0);
+err_unpin:
+  pfFileHandle->UnpinPage(pageNum);
+err_return:
+  return (rc);
   }
 private:
   int findGreat(T* key1, T* key2) {
@@ -358,7 +408,56 @@ public:
     }
     return (0);
   }
-  RC Delete(IX_BpTreeNode<T>* parentpointer, IX_BpTreeNode<T>* nodepointer, IX_BpTreeEntry<T>* entry, IX_BpTreeEntry<T>* oldchildentry) {
+  RC Delete(IX_BpTreeNode<T>* nodepointer, IX_BpTreeEntry<T>* entry, IX_BpTreeEntry<T>** oldchildentry) {
+    RC rc;
+    PF_PageHandle pageHandle;
+    PageNum pageNum;
+
+    if(nodepointer == NULL)
+      nodepointer = root;
+
+    if(!nodepointer->nodeHdr.isLeaf) { // non-leaf node
+      int i = 0;
+      for(i = 0; i < nodepointer->nodeHdr.count; i++) {
+        IX_BpTreeEntry<T> tmpentry;
+        nodepointer->getData(i, tmpentry);
+        int ret = findGreat(tmpentry.key, entry->key);
+        if(ret == 1)
+          break;
+      }
+      i = i - 1;
+      if(i == -1)
+        pageNum = nodepointer->nodeHdr.seqPointer;
+      else {
+        IX_BpTreeEntry<T> tmpentry;
+        nodepointer->getData(i, tmpentry);
+        tmpentry.rid.GetPageNum(pageNum);
+      }
+      IX_BpTreeNode<T>* newTree = new IX_BpTreeNode<T>(pageNum, pfFileHandle, 0, attrLength, attrType);
+      if((rc = newTree->load()))
+        return rc;
+      Delete(newTree, entry, oldchildentry);
+      if(*oldchildentry == NULL) return (0);
+      else { // remove case
+        if((rc = newTree->deleteData(*oldchildentry)))
+          return (rc);
+        delete *oldchildentry;
+        *oldchildentry = NULL;
+        return (0);
+      }
+    }
+    else { // leaf node
+      if((rc = nodepointer->deleteData(entry)))
+        return rc;
+      delete *oldchildentry;
+      *oldchildentry = NULL;
+      if(nodepointer->nodeHdr.count == -1) {
+        IX_BpTreeEntry<T>* e = new IX_BpTreeEntry<T>();
+        nodepointer->getData(0, *e);
+        e->rid = RID(nodepointer->pageNum, 0);
+        *oldchildentry = e; 
+      }
+    }
     return (0);
   }
   RC Find(T* value, RID &rid) {

@@ -15,7 +15,6 @@ IX_IndexScan::~IX_IndexScan() {
 }
 
 RC IX_IndexScan::OpenScan(const IX_IndexHandle &indexHandle, CompOp compOp, void *value, ClientHint pinHint) {
-  RC rc;
   if(bScanOpen)
     return IX_SCANOPEN;
 
