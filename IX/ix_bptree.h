@@ -108,6 +108,9 @@ public:
       return rc;
     }
 
+    if(nodeHdr.count <= slot)
+      return IX_EOF;
+
     int pn, sn;
     memcpy(&pn, pData + attrLength + slot * IX_BPTREE_ENTRY_SIZE + IX_BPTREE_HEADER_SIZE, sizeof(int));
     memcpy(&sn, pData + attrLength + sizeof(int) + slot * IX_BPTREE_ENTRY_SIZE + IX_BPTREE_HEADER_SIZE, sizeof(int));
@@ -180,24 +183,37 @@ err_unpin:
 err_return:
   return (rc);
   }
-  RC deleteData(IX_BpTreeEntry<T>* entry) {
+  RC deleteData(IX_BpTreeEntry<T>* entry, int leaf) {
     RC rc;
     PF_PageHandle pageHandle;
     char* pData;
     int i = 0;
-
-    for(i = 0; i < nodeHdr.count; i++) {
-      IX_BpTreeEntry<T> e;
-      getData(i, e);
-      int ret = findGreat(e.key, entry->key);
-      if(ret == 2 && e == *entry)
-        break;
-      else if(ret == 1)
-        return IX_NOENTRY;
+    if(leaf) {
+      for(i = 0; i < nodeHdr.count; i++) {
+        IX_BpTreeEntry<T> e;
+        getData(i, e);
+        int ret = findGreat(e.key, entry->key);
+        if(ret == 2 && e == *entry)
+          break;
+        else if(ret == 1) {
+          rc = IX_NOENTRY;
+          goto err_return;
+        }
+      }
+    }
+    else {
+      for(i = 0; i < nodeHdr.count; i++) {
+        IX_BpTreeEntry<T> e;
+        getData(i, e);
+        if(e == *entry)
+          break;
+      }
     }
 
-    if(i == nodeHdr.count)
-      return IX_NOENTRY;
+    if(i == nodeHdr.count) {
+      rc = IX_NOENTRY;
+      goto err_return;
+    }
 
     if((rc = pfFileHandle->GetThisPage(pageNum, pageHandle)))
       goto err_return;
@@ -212,7 +228,8 @@ err_return:
       memcpy(pData + i * IX_BPTREE_ENTRY_SIZE + IX_BPTREE_HEADER_SIZE, buf, cpylen);
     }
     else {
-      return IX_NOENTRY;
+      rc = IX_NOENTRY;
+      goto err_return;
     }
     nodeHdr.count--;
 
@@ -437,23 +454,32 @@ public:
       if((rc = newTree->load()))
         return rc;
       Delete(newTree, entry, oldchildentry);
+      delete newTree;
       if(*oldchildentry == NULL) return (0);
       else { // remove case
-        if((rc = newTree->deleteData(*oldchildentry)))
+        (*oldchildentry)->rid.GetPageNum(pageNum);
+        if(pageNum == nodepointer->nodeHdr.seqPointer)
+          nodepointer->nodeHdr.seqPointer = IX_NODE_END;
+        else if((rc = nodepointer->deleteData(*oldchildentry, 0)))
           return (rc);
         delete *oldchildentry;
         *oldchildentry = NULL;
+        if(nodepointer->nodeHdr.count == 0) {
+          IX_BpTreeEntry<T>* e = new IX_BpTreeEntry<T>();
+          e->rid = RID(nodepointer->pageNum, 0);
+          *oldchildentry = e;
+        }
         return (0);
       }
     }
     else { // leaf node
-      if((rc = nodepointer->deleteData(entry)))
+      if((rc = nodepointer->deleteData(entry, 1)))
         return rc;
       delete *oldchildentry;
       *oldchildentry = NULL;
-      if(nodepointer->nodeHdr.count == -1) {
+      if(nodepointer->nodeHdr.count == 0) {
         IX_BpTreeEntry<T>* e = new IX_BpTreeEntry<T>();
-        nodepointer->getData(0, *e);
+        //nodepointer->getData(0, *e);
         e->rid = RID(nodepointer->pageNum, 0);
         *oldchildentry = e; 
       }
@@ -485,6 +511,8 @@ public:
           curTree->getData(i, tmpentry);
           tmpentry.rid.GetPageNum(pageNum);
         }
+        if(pageNum == IX_NODE_END)
+          return IX_EOF;
         IX_BpTreeNode<T>* newTree = new IX_BpTreeNode<T>(pageNum, pfFileHandle, 0, attrLength, attrType);
         if((rc = newTree->load()))
           return rc;
@@ -515,6 +543,11 @@ public:
     else {
       while(!curTree->nodeHdr.isLeaf) {
         pageNum = curTree->nodeHdr.seqPointer;
+        if(pageNum == IX_NODE_END) {
+          IX_BpTreeEntry<T> tmpentry;
+          curTree->getData(0, tmpentry);
+          tmpentry.rid.GetPageNum(pageNum); 
+        }
         IX_BpTreeNode<T>* newTree = new IX_BpTreeNode<T>(pageNum, pfFileHandle, 0, attrLength, attrType);
         if((rc = newTree->load()))
           return rc;

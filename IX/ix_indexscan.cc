@@ -79,6 +79,7 @@ RC IX_IndexScan::GetNextEntry(RID &rid) {
     rid.GetSlotNum(curSlotNum);
   }
 
+  printf("curPageNum, curSlotNum: %d, %d\n", curPageNum, curSlotNum);
   if((rc = pIndexHandle->pfFileHandle.GetThisPage(curPageNum, pageHandle)))
     goto err_return;
 
