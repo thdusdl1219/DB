@@ -75,7 +75,7 @@ public:
 private:
     RC PassEqual(char* pData, char** newData, IX_BpTreeNodeHdr* nodeHdr, int gt);
     RC Find(RID& rid);
-    RC Operation(RID& rid, char* pData);
+    RC Operation(RID& rid, char* pData, IX_BpTreeNodeHdr* nodeHdr);
     int Compare(void* key1, void* key2);
     int bScanOpen;
     IX_IndexHandle* pIndexHandle;
