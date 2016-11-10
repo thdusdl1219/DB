@@ -24,7 +24,7 @@ struct IX_FileHdr {
 
 
 template<typename T> class IX_BpTree;
-
+struct IX_BpTreeNodeHdr;
 //
 // IX_IndexHandle: IX Index File interface
 //
@@ -73,6 +73,7 @@ public:
     // Close index scan
     RC CloseScan();
 private:
+    RC PassEqual(char* pData, char** newData, IX_BpTreeNodeHdr* nodeHdr, int gt);
     RC Find(RID& rid);
     RC Operation(RID& rid, char* pData);
     int Compare(void* key1, void* key2);
