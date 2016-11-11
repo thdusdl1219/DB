@@ -429,6 +429,7 @@ public:
     RC rc;
     PF_PageHandle pageHandle;
     PageNum pageNum;
+    char *pData;
 
     if(nodepointer == NULL)
       nodepointer = root;
@@ -462,12 +463,14 @@ public:
           nodepointer->nodeHdr.seqPointer = IX_NODE_END;
         else if((rc = nodepointer->deleteData(*oldchildentry, 0)))
           return (rc);
+        //pfFileHandle->DisposePage(pageNum);
         delete *oldchildentry;
         *oldchildentry = NULL;
         if(nodepointer->nodeHdr.count == 0) {
           IX_BpTreeEntry<T>* e = new IX_BpTreeEntry<T>();
           e->rid = RID(nodepointer->pageNum, 0);
           *oldchildentry = e;
+          pfFileHandle->DisposePage(nodepointer->pageNum);
         }
         return (0);
       }
@@ -478,10 +481,28 @@ public:
       delete *oldchildentry;
       *oldchildentry = NULL;
       if(nodepointer->nodeHdr.count == 0) {
+        IX_BpTreeNodeHdr tmpHdr;
         IX_BpTreeEntry<T>* e = new IX_BpTreeEntry<T>();
         //nodepointer->getData(0, *e);
         e->rid = RID(nodepointer->pageNum, 0);
-        *oldchildentry = e; 
+        *oldchildentry = e;
+
+        if(nodepointer->nodeHdr.seqPointer != IX_NODE_END) {
+          IX_BpTreeNode<T> prevNode = IX_BpTreeNode<T>(nodepointer->nodeHdr.seqPointer, pfFileHandle, 1, attrLength, attrType);
+          if((rc = prevNode.load()))
+            return rc;
+          prevNode.nodeHdr.next = nodepointer->nodeHdr.next;
+        }
+
+        if(nodepointer->nodeHdr.next != IX_NODE_END) {
+          IX_BpTreeNode<T> nextNode = IX_BpTreeNode<T>(nodepointer->nodeHdr.next, pfFileHandle, 1, attrLength, attrType);
+          if((rc = nextNode.load()))
+            return rc;
+          nextNode.nodeHdr.seqPointer = nodepointer->nodeHdr.seqPointer;
+        }
+        nodepointer->nodeHdr.seqPointer = IX_NODE_END;
+        nodepointer->nodeHdr.next = IX_NODE_END; 
+        pfFileHandle->DisposePage(nodepointer->pageNum);
       }
     }
     return (0);

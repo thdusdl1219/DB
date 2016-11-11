@@ -70,7 +70,7 @@ RC IX_IndexScan::GetNextEntry(RID &rid) {
   if(curPageNum == IX_NODE_END)
     return IX_EOF;
 
-  printf("curPageNum, curSlotNum: %d, %d\n", curPageNum, curSlotNum);
+  printf("curPageNum, curSlotNum1: %d, %d\n", curPageNum, curSlotNum);
   if(curPageNum == IX_HEADER_PAGE_NUM) {
     RID rid;
     if((rc = Find(rid)))
@@ -79,8 +79,8 @@ RC IX_IndexScan::GetNextEntry(RID &rid) {
     rid.GetSlotNum(curSlotNum);
   }
 
-  printf("curPageNum, curSlotNum: %d, %d\n", curPageNum, curSlotNum);
-  if((rc = pIndexHandle->pfFileHandle.GetThisPage(curPageNum, pageHandle)))
+  printf("curPageNum, curSlotNum2: %d, %d\n", curPageNum, curSlotNum);
+/*  if((rc = pIndexHandle->pfFileHandle.GetThisPage(curPageNum, pageHandle)))
     goto err_return;
 
   if((rc = pageHandle.GetData(pData)))
@@ -88,7 +88,9 @@ RC IX_IndexScan::GetNextEntry(RID &rid) {
 
   memcpy(&nodeHdr, pData, IX_BPTREE_HEADER_SIZE);
 
-  if(curSlotNum == nodeHdr.count || curSlotNum == -1) {
+  printf("curPageNum, curSlotNum5: %d, %d\n", curPageNum, curSlotNum);
+  if((curSlotNum == nodeHdr.count) || (curSlotNum == IX_NODE_END)) {
+  printf("curPageNum, curSlotNum3: %d, %d\n", curPageNum, curSlotNum);
     if((rc = pIndexHandle->pfFileHandle.UnpinPage(curPageNum)))
       goto err_return;
     if(curSlotNum == nodeHdr.count) {
@@ -98,6 +100,7 @@ RC IX_IndexScan::GetNextEntry(RID &rid) {
     else {
       curPageNum = nodeHdr.seqPointer;
     }
+  printf("curPageNum, curSlotNum4: %d, %d\n", curPageNum, curSlotNum);
 
     if(curPageNum == IX_NODE_END)
       return IX_EOF;
@@ -113,18 +116,14 @@ RC IX_IndexScan::GetNextEntry(RID &rid) {
       curSlotNum = nodeHdr.count - 1;
     }
   }
+*/
 
-
-  printf("curPageNum, curSlotNum: %d, %d\n", curPageNum, curSlotNum);
   printf("rc1 : %d\n", rc);
 
-  if((rc = Operation(rid, pData, &nodeHdr)))
+  if((rc = Operation(rid)))
     goto err_unpin;
 
   printf("curPageNum: %d\n", curPageNum);
-  if((rc = pIndexHandle->pfFileHandle.UnpinPage(curPageNum)))
-    goto err_return;
-  printf("rc2 : %d\n", rc);
 
   return (0);
 err_unpin:
@@ -151,11 +150,24 @@ RC IX_IndexScan::CloseScan() {
   return (0);
 }
 
-RC IX_IndexScan::Operation(RID& rid, char* pData, IX_BpTreeNodeHdr* nodeHdr) {
+RC IX_IndexScan::Operation(RID& rid) {
   RID ret;
+  PF_PageHandle pageHandle;
   RC rc;
+  IX_BpTreeNodeHdr nodeHdr;
+  char* pData;
   char* newData = NULL;
+  char* tmpData;
   int c = 0;
+
+  if((rc = pIndexHandle->pfFileHandle.GetThisPage(curPageNum, pageHandle)))
+    return rc;
+
+  if((rc = pageHandle.GetData(pData)))
+    return rc;
+
+  memcpy(&nodeHdr, pData, IX_BPTREE_HEADER_SIZE);
+
   switch(compOp) {
     case EQ_OP:
       c = Compare(pData + curSlotNum * IX_BPTREE_ENTRY_SIZE + IX_BPTREE_HEADER_SIZE, value);
@@ -165,37 +177,79 @@ RC IX_IndexScan::Operation(RID& rid, char* pData, IX_BpTreeNodeHdr* nodeHdr) {
       rid = ret;
       curSlotNum++;
 
-      if(curSlotNum > nodeHdr->count) {
+      if((rc = pIndexHandle->pfFileHandle.UnpinPage(curPageNum)))
+        return rc;
+      if(curSlotNum == nodeHdr.count) {
+        curPageNum = nodeHdr.next;
+        curSlotNum = 0;
+      }
+
+      else if(curSlotNum > nodeHdr.count) {
         return IX_SOMETHINGWRONG;
       }
       break;
     case LT_OP:
-      if((rc = PassEqual(pData, &newData, nodeHdr, 0)))
+      if((rc = PassEqual(pData, &newData, &nodeHdr, 0)))
         return rc;
 
       memcpy(&ret, newData + attrLength + curSlotNum * IX_BPTREE_ENTRY_SIZE + IX_BPTREE_HEADER_SIZE, sizeof(RID));
       rid = ret;
       curSlotNum--;
-      if(curSlotNum < -1)
+      if((rc = pIndexHandle->pfFileHandle.UnpinPage(curPageNum)))
+        return rc;
+      if(curSlotNum == -1) {
+        curPageNum = nodeHdr.seqPointer;
+        if(curPageNum != IX_NODE_END) {
+          if((rc = pIndexHandle->pfFileHandle.GetThisPage(curPageNum, pageHandle)))
+            return rc;
+          if((rc = pageHandle.GetData(tmpData)))
+            return rc;
+          memcpy(&nodeHdr, tmpData, IX_BPTREE_HEADER_SIZE);
+          curSlotNum = nodeHdr.count - 1;
+          if((rc = pIndexHandle->pfFileHandle.UnpinPage(curPageNum)))
+            return rc;
+        }
+      }
+      else if(curSlotNum < -1)
         return IX_SOMETHINGWRONG;
       // TODO implement LT..
       break;
     case GT_OP:
-      if((rc = PassEqual(pData, &newData, nodeHdr, 1)))
+      if((rc = PassEqual(pData, &newData, &nodeHdr, 1)))
         return rc;
 
       memcpy(&ret, newData + attrLength + curSlotNum * IX_BPTREE_ENTRY_SIZE + IX_BPTREE_HEADER_SIZE, sizeof(RID));
       rid = ret;
       curSlotNum++;
-      if(curSlotNum > nodeHdr->count)
+      if((rc = pIndexHandle->pfFileHandle.UnpinPage(curPageNum)))
+        return rc;
+      if(curSlotNum == nodeHdr.count) {
+        curPageNum = nodeHdr.next;
+        curSlotNum = 0;
+      }
+      else if(curSlotNum > nodeHdr.count)
         return IX_SOMETHINGWRONG;
       break;
     case LE_OP:
       memcpy(&ret, pData + attrLength + curSlotNum * IX_BPTREE_ENTRY_SIZE + IX_BPTREE_HEADER_SIZE, sizeof(RID));
       rid = ret;
       curSlotNum--;
-
-      if(curSlotNum < -1)
+      if((rc = pIndexHandle->pfFileHandle.UnpinPage(curPageNum)))
+        return rc;
+      if(curSlotNum == -1) {
+        curPageNum = nodeHdr.seqPointer;
+        if(curPageNum != IX_NODE_END) {
+          if((rc = pIndexHandle->pfFileHandle.GetThisPage(curPageNum, pageHandle)))
+            return rc;
+          if((rc = pageHandle.GetData(tmpData)))
+            return rc;
+          memcpy(&nodeHdr, tmpData, IX_BPTREE_HEADER_SIZE);
+          curSlotNum = nodeHdr.count - 1;
+          if((rc = pIndexHandle->pfFileHandle.UnpinPage(curPageNum)))
+            return rc;
+        }
+      }
+      else if(curSlotNum < -1)
         return IX_SOMETHINGWRONG;
       break;
     case NO_OP:
@@ -203,7 +257,13 @@ RC IX_IndexScan::Operation(RID& rid, char* pData, IX_BpTreeNodeHdr* nodeHdr) {
       memcpy(&ret, pData + attrLength + curSlotNum * IX_BPTREE_ENTRY_SIZE + IX_BPTREE_HEADER_SIZE, sizeof(RID));
       rid = ret;
       curSlotNum++;
-      if(curSlotNum > nodeHdr->count)
+      if((rc = pIndexHandle->pfFileHandle.UnpinPage(curPageNum)))
+        return rc;
+      if(curSlotNum == nodeHdr.count) {
+        curPageNum = nodeHdr.next;
+        curSlotNum = 0;
+      }
+      else if(curSlotNum > nodeHdr.count)
         return IX_SOMETHINGWRONG;
       break;
     case NE_OP:
@@ -243,6 +303,8 @@ RC IX_IndexScan::PassEqual(char* pData, char** newData, IX_BpTreeNodeHdr* nodeHd
       else {
         curSlotNum--;
         if(curSlotNum == -1) {
+          if((rc = pIndexHandle->pfFileHandle.UnpinPage(curPageNum)))
+            goto err_return;
           curPageNum = nodeHdr->seqPointer;
           
           if((rc = pIndexHandle->pfFileHandle.GetThisPage(curPageNum, pageHandle)))

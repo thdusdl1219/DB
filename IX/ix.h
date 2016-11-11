@@ -17,7 +17,6 @@
 // file을 위한 헤더
 //
 struct IX_FileHdr {
-  PageNum firstFree;
   AttrType attrType;
   int attrLength;
 };
@@ -46,7 +45,6 @@ public:
 private:
     PF_FileHandle pfFileHandle;
     IX_FileHdr fileHdr;
-    int bHdrChanged;
     IX_BpTree<int>* intt;
     IX_BpTree<float>* floatt;
     IX_BpTree<char>* chart;
@@ -75,7 +73,7 @@ public:
 private:
     RC PassEqual(char* pData, char** newData, IX_BpTreeNodeHdr* nodeHdr, int gt);
     RC Find(RID& rid);
-    RC Operation(RID& rid, char* pData, IX_BpTreeNodeHdr* nodeHdr);
+    RC Operation(RID& rid);
     int Compare(void* key1, void* key2);
     int bScanOpen;
     IX_IndexHandle* pIndexHandle;

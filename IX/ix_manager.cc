@@ -40,7 +40,6 @@ RC IX_Manager::CreateIndex(const char *fileName, int indexNo, AttrType attrType,
 
 // IX_FileHdr 와 관련된 부분
   fileHdr = (IX_FileHdr *)pData;
-  fileHdr->firstFree = IX_PAGE_LIST_END;
   fileHdr->attrType = attrType;
   fileHdr->attrLength = attrLength;
 
@@ -101,8 +100,6 @@ RC IX_Manager::OpenIndex(const char* fileName, int indexNo, IX_IndexHandle &inde
   if((rc = indexHandle.pfFileHandle.UnpinPage(IX_HEADER_PAGE_NUM)))
     goto err_close;
 
-  indexHandle.bHdrChanged = FALSE;
-
   return (0);
 
 err_unpin:
@@ -116,38 +113,14 @@ err_return:
 
 RC IX_Manager::CloseIndex(IX_IndexHandle &indexHandle) {
   RC rc;
-  if (indexHandle.bHdrChanged) {
-    PF_PageHandle pageHandle;
-    char* pData;
-    
-    if((rc = indexHandle.pfFileHandle.GetFirstPage(pageHandle)))
-      goto err_return;
-
-    if((rc = pageHandle.GetData(pData)))
-      goto err_unpin;
-
-    memcpy(pData, &indexHandle.fileHdr, sizeof(indexHandle.fileHdr));
-
-    if((rc = indexHandle.pfFileHandle.MarkDirty(IX_HEADER_PAGE_NUM)))
-      goto err_unpin;
-
-    if((rc = indexHandle.pfFileHandle.UnpinPage(IX_HEADER_PAGE_NUM)))
-      goto err_return;
-
-    indexHandle.bHdrChanged = FALSE;
-  }
-
 
   if((rc = pPfm->CloseFile(indexHandle.pfFileHandle)))
     goto err_return;
 
   memset(&indexHandle.fileHdr, 0, sizeof(indexHandle.fileHdr));
-  indexHandle.fileHdr.firstFree = IX_PAGE_LIST_END;
 
   return (0);
 
-err_unpin:
-  indexHandle.pfFileHandle.UnpinPage(IX_HEADER_PAGE_NUM);
 err_return:
   return (rc);
 
